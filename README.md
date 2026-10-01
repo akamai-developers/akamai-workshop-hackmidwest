@@ -18,7 +18,7 @@ Because it speaks the OpenAI API, the official `openai` package and most framewo
 
 - Python 3.10 or newer
 - Your team's API key from the organizers. One key per team, shared by all members. Treat it like a password: keep it in a backend or a local `.env`, never in frontend code or a public repository.
-- About one hour for all three labs
+- About 10 minutes for the quickstart, about 90 minutes for all five notebooks
 
 ## Setup
 
@@ -39,15 +39,69 @@ from openai import OpenAI
 client = OpenAI()  # reads OPENAI_BASE_URL and OPENAI_API_KEY from the environment
 ```
 
+## Quick reference
+
+Three operations. Every request carries `Authorization: Bearer <team key>` and `Content-Type: application/json`.
+
+**Chat** `POST /v1/chat/completions`
+
+```bash
+curl https://ws.akamai-workshops.com/v1/chat/completions \
+  -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model": "hackathon-chat", "messages": [{"role": "user", "content": "Say hello."}], "max_tokens": 50}'
+```
+
+```python
+r = client.chat.completions.create(model="hackathon-chat",
+        messages=[{"role": "user", "content": "Say hello."}], max_tokens=50)
+print(r.choices[0].message.content)
+```
+
+Fields: `messages` (required), `max_tokens` (default 512, max 4096), `temperature`, `stream`, `response_format`, `tools`, `tool_choice`. Thinking: `extra_body={"chat_template_kwargs": {"enable_thinking": True}}`.
+
+**Embeddings** `POST /v1/embeddings`
+
+```bash
+curl https://ws.akamai-workshops.com/v1/embeddings \
+  -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model": "hackathon-embedding", "input": ["first text", "second text"]}'
+```
+
+```python
+r = client.embeddings.create(model="hackathon-embedding", input=["first text", "second text"])
+vectors = [item.embedding for item in r.data]   # 1,024 floats each
+```
+
+Fields: `input` (required; one string or up to 16 strings).
+
+**Images** `POST /v1/images/generations`
+
+```bash
+curl https://ws.akamai-workshops.com/v1/images/generations \
+  -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model": "hackathon-image", "prompt": "A yellow bicycle, simple icon", "size": "512x512", "response_format": "b64_json"}'
+```
+
+```python
+import base64
+r = client.images.generate(model="hackathon-image", prompt="A yellow bicycle, simple icon",
+        size="512x512", response_format="b64_json")
+open("out.png", "wb").write(base64.b64decode(r.data[0].b64_json))
+```
+
+Fields: `prompt` (required), `size` (`512x512`, `768x768`, `1024x1024`), `response_format` (`b64_json` only), `n` (always 1), `extra_body={"seed": 7}`.
+
 ## Labs
 
 | Lab | What you build | Time |
 |---|---|---|
-| [1. Chat completions](notebooks/01_chat_completions.ipynb) | First request, streaming, conversations, output limits, long documents, thinking mode, quotas | 25 min |
+| [0. Quickstart](notebooks/00_quickstart.ipynb) | All three endpoints on one page: URL, body, fields, minimal code. Start here. | 10 min |
+| [1. Chat completions](notebooks/01_chat_completions.ipynb) | Streaming, conversations, output limits, long documents, thinking mode, quotas | 25 min |
 | [2. Embeddings and retrieval](notebooks/02_embeddings_and_retrieval.ipynb) | Semantic search over your own notes, then grounded answers from the chat model | 20 min |
 | [3. Image generation](notebooks/03_image_generation.ipynb) | Sizes, seeds, and handling the image quota | 15 min |
+| [4. Tools and structured output](notebooks/04_tools_and_structured_output.ipynb) | JSON-schema replies, function calling, the tool loop | 25 min |
 
-Do them in order. Lab 1 sets up the client the other two reuse.
+Start with the quickstart. Each lab opens with "The call in one look": the endpoint, a field table, and the minimal call, before anything else.
 
 ## Limits that apply to every team
 

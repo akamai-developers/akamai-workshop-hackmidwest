@@ -3,3 +3,5 @@ python-dotenv>=1.0
 numpy>=1.26
 pillow>=10
 jupyter>=1.0
+requests>=2.31
+pydantic>=2
