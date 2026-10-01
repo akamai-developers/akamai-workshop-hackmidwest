@@ -1,0 +1,5 @@
+openai>=3,<4
+python-dotenv>=1.0
+numpy>=1.26
+pillow>=10
+jupyter>=1.0
