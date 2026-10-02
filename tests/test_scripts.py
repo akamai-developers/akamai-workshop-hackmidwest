@@ -1,4 +1,4 @@
-"""The bash scripts: a syntax check for each, the .env helpers in scripts/lib.sh, and every script against a fake account."""
+"""The bash scripts: line endings and a syntax check for each, the .env helpers in scripts/lib.sh, and every script against a fake account."""
 import base64
 import json
 import os
@@ -18,6 +18,17 @@ SCRIPTS = sorted((ROOT / "scripts").glob("*.sh"))
 def test_every_script_parses(script):
     result = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_git_checks_out_every_file_with_lf_line_endings():
+    """Git for Windows checks files out with CRLF by default, and bash cannot run a script with CRLF."""
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("not a git checkout")
+    files = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(["git", "check-attr", "--stdin", "-z", "eol"], cwd=ROOT, input=files,
+                         capture_output=True, text=True, check=True).stdout.split("\0")
+    not_lf = [path for path, value in zip(out[0::3], out[2::3]) if value != "lf"]
+    assert not not_lf, f"give these eol=lf in .gitattributes: {not_lf}"
 
 
 def scratch_repo(tmp_path: Path, env_text: str | None) -> Path:
@@ -51,6 +62,12 @@ def test_get_env_strips_quotes(tmp_path):
     result = run_with_lib(tmp_path, "OBJ_BUCKET='hackmidwest-abc'\nDATABASE_URL=\"postgresql://x\"\n",
                           "get_env OBJ_BUCKET\nget_env DATABASE_URL")
     assert result.stdout.splitlines()[:2] == ["hackmidwest-abc", "postgresql://x"]
+
+
+def test_get_env_ignores_windows_line_endings(tmp_path):
+    result = run_with_lib(tmp_path, "OBJ_BUCKET=hackmidwest-abc\r\nOBJ_KEY_ID='1234567'\r\n",
+                          'printf "[%s]\\n" "$(get_env OBJ_BUCKET)" "$(get_env OBJ_KEY_ID)"')
+    assert result.stdout.split("\n")[:2] == ["[hackmidwest-abc]", "[1234567]"]
 
 
 def test_set_env_replaces_in_place_adds_new_keys_and_never_duplicates(tmp_path):

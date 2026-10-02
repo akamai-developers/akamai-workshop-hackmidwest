@@ -2,6 +2,19 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.5] - 2026-10-02
+
+Windows line endings.
+
+### Fixed
+
+- A clone made on Windows runs the scripts. Git for Windows, which VS Code on Windows also uses, checks files out with CRLF line endings by default, and bash then stopped on every script with `set: pipefail: invalid option name`. A new `.gitattributes` makes git check out every file with LF, whatever `core.autocrlf` says.
+- The scripts read a `.env` saved with Windows line endings, for example a new file in Notepad holding a teammate's settings. Before, `get_env` in `scripts/lib.sh` kept the CR at the end of each value, so `scripts/up.sh` and `scripts/down.sh` handed `linode-cli obj` a bucket name ending in CR. It stopped with a Python traceback that ends in `Invalid bucket name`, and `down.sh` asked to be run again, which failed the same way. The agent itself was never affected, because python-dotenv drops the CR.
+
+### Verified
+
+- A clone made with `core.autocrlf=true`, the Git for Windows default, checked out all 59 files with CRLF, and 26 of the 80 tests failed. With `.gitattributes`, the same kind of clone checked out all 60 files with LF, and the 82 tests passed. Two new tests fail when either fix is taken out. `tests/test_scripts.py` also passed with FreeBSD's `tr` and with bash 3.2.57.
+
 ## [0.6.4] - 2026-10-02
 
 What a brand-new account can run into, and a check of the kit with FreeBSD's command line tools.

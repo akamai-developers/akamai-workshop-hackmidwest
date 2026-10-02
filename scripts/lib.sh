@@ -33,8 +33,9 @@ if ! command -v linode-cli >/dev/null; then
 fi
 
 # get_env KEY: print KEY's value from .env, without surrounding quotes. Prints nothing if KEY is missing.
+# tr drops the CR that Windows editors such as Notepad put at the end of each line.
 get_env() {
-  { grep "^$1=" .env || true; } | tail -n 1 | cut -d= -f2- | sed -e "s/^[\"']//" -e "s/[\"']\$//"
+  { grep "^$1=" .env || true; } | tail -n 1 | tr -d '\r' | cut -d= -f2- | sed -e "s/^[\"']//" -e "s/[\"']\$//"
 }
 
 # set_env KEY VALUE: replace the KEY= line in .env, or add one at the end. Never adds a second KEY line.

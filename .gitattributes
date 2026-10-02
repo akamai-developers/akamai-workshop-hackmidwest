@@ -1,0 +1,4 @@
+# Check out every text file with LF line endings, on Windows too.
+# Git for Windows uses CRLF by default, and bash then stops on every script with
+# "set: pipefail: invalid option name".
+* text=auto eol=lf
