@@ -8,6 +8,7 @@ Every page this kit relies on, with one line on when you need it. The guides lin
 |---|---|
 | [Sign up with $300 in free credit](http://login.linode.com/signup?promo=akm-dev-git-300-72326-P153) | The night before. One account per person. |
 | [Add a promo code](https://techdocs.akamai.com/cloud-computing/docs/add-a-promo-code) | You signed up in the last 90 days without the link above. |
+| [Troubleshooting Cloud Manager errors](https://techdocs.akamai.com/cloud-computing/docs/troubleshooting-cloud-manager-errors) | A command says `Your account must be activated` or `Account Limit Reached`. |
 | [Cloud Manager](https://cloud.linode.com) | The whole event. Every resource the kit creates appears here. |
 | [API tokens page](https://cloud.linode.com/profile/tokens) | Creating or revoking the token linode-cli uses. |
 | [Manage personal access tokens](https://techdocs.akamai.com/cloud-computing/docs/manage-personal-access-tokens) | Choosing token scopes and expiry. |

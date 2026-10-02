@@ -31,7 +31,7 @@ By the end of this page you will be able to:
 - A laptop running macOS or Linux. On Windows, install [WSL 2](https://learn.microsoft.com/windows/wsl/install) and do everything inside its Ubuntu terminal, because the scripts are bash.
 - Python 3.10 to 3.14, and git. Check with `python3 --version` and `git --version`. macOS ships Python 3.9, which is too old: install 3.12 with `brew install python@3.12` or from [python.org](https://www.python.org/downloads/), and type `python3.12` where the steps say `python3`. On Ubuntu and in WSL, also run `sudo apt install -y python3-venv`.
 - Python 3.15 also works, but `pip install` has to compile `pydantic-core`, which had no ready-made 3.15 build on 2026-10-02. That adds a few minutes and needs a C compiler. A Mac has one if `git --version` works. If `pip install` fails on `pydantic-core`, use Python 3.14 or older.
-- A credit card or PayPal account for sign-up. Akamai uses it to verify you. The credit pays for what the kit uses.
+- A credit card or PayPal account, and a phone that can receive text messages. Akamai uses both to verify you at sign-up. The credit pays for what the kit uses.
 - Your team's inference key from the organizers. It starts with `hk_`.
 - About 15 minutes
 
@@ -42,6 +42,8 @@ Open the sign-up link and create the account:
 **[http://login.linode.com/signup?promo=akm-dev-git-300-72326-P153](http://login.linode.com/signup?promo=akm-dev-git-300-72326-P153)**
 
 The link carries the promo code, so the credit lands on the account by itself. Confirm your email when asked. You end up in Cloud Manager at [cloud.linode.com](https://cloud.linode.com), the web console where everything you create appears.
+
+Sign-up also asks for your phone number and texts you a code to type in. Most accounts are active as soon as you finish. A small number are held for a manual review first. Until the review ends, creating anything fails with `Your account must be activated before you can use this endpoint`, and Akamai's advice is to check your email for instructions. That is one more reason to sign up the night before. If your account is still held when you start guide 01, pair with a teammate and build on their account until yours clears. See [Troubleshooting Cloud Manager errors](https://techdocs.akamai.com/cloud-computing/docs/troubleshooting-cloud-manager-errors).
 
 To check the credit, open **Administration > Billing** in Cloud Manager. The promotion shows with the amount remaining and the date it expires.
 

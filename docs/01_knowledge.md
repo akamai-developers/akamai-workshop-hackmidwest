@@ -75,6 +75,8 @@ Using default values: {}; use the --no-defaults flag to disable defaults
 
 linode-cli prints the first line before any command that could use a saved default, such as a region. The braces are empty because you skipped the defaults in the pre-work, so nothing was filled in for you.
 
+> NOTE: If the command prints `Your account must be activated before you can use this endpoint`, Akamai is still reviewing your new account. Check your email for instructions, and pair with a teammate on their account until it clears. See [pre-work step 1](00_prework.md#step-1-create-your-account-with-300-of-credit).
+
 In Cloud Manager, open **Databases**: `hackmidwest-db` is there with the status Provisioning. Keep its id in a variable for later commands. This looks it up by label, so it works in any terminal:
 
 ```bash

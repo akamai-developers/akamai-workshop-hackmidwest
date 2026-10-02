@@ -2,6 +2,19 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.4] - 2026-10-02
+
+What a brand-new account can run into, and a check of the kit with FreeBSD's command line tools.
+
+### Changed
+
+- The pre-work says sign-up texts a code to your phone, and that Akamai holds a small number of new accounts for a manual review first. Until it ends, creating anything fails with `Your account must be activated before you can use this endpoint`, and Akamai's advice is to check your email. Guide 01 step 1, the first command that creates something, names the same message and says to pair with a teammate until the account clears. Both facts come from Akamai's [Get started](https://techdocs.akamai.com/cloud-computing/docs/getting-started) and [Troubleshooting Cloud Manager errors](https://techdocs.akamai.com/cloud-computing/docs/troubleshooting-cloud-manager-errors) pages, which `docs/links.md` now lists.
+
+### Verified
+
+- The scripts and the guides with the command line tools a Mac is closest to. In a Chimera Linux container, `sed`, `grep`, `awk`, `date`, `mktemp`, `base64`, `wc`, `cut`, `tr`, `head`, `sort`, `uniq`, and `seq` come from FreeBSD 15 (the `chimerautils` 15.0.2 package). `grep -V` prints `2.6.0-FreeBSD`, the same as macOS. `awk` is the BWK awk that macOS also ships, and `tar` is bsdtar 3.8.8. There, the 26 tests in `tests/test_scripts.py`, which run every script against a fake account, passed with bash 5.3 and again with bash 3.2.57, the version macOS ships. A planted GNU-only `sed -i` in `scripts/lib.sh` failed 12 of them and passed with GNU sed, so the tests notice the difference.
+- Every bash block of the README and the guides, pasted into bash and into zsh with only the network and cloud commands replaced by stubs, sent the stubs the same arguments with FreeBSD's tools as with GNU's: 84 blocks, 140 commands. The only output that differs is the padding of `uniq -c` in guide 05 step 3, where a Mac prints `  20 200` instead of `     20 200`. `scripts/check_links.sh` printed the same 106 lines with both.
+
 ## [0.6.3] - 2026-10-02
 
 Checks for the Python a student brings, from 3.10 to 3.15.
