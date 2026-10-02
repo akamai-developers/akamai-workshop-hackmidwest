@@ -29,7 +29,8 @@ By the end of this page you will be able to:
 ## Prerequisites
 
 - A laptop running macOS or Linux. On Windows, install [WSL 2](https://learn.microsoft.com/windows/wsl/install) and do everything inside its Ubuntu terminal, because the scripts are bash.
-- Python 3.10 or newer and git. Check with `python3 --version` and `git --version`. macOS ships Python 3.9, which is too old: install 3.12 with `brew install python@3.12` or from [python.org](https://www.python.org/downloads/), and type `python3.12` where the steps say `python3`. On Ubuntu and in WSL, also run `sudo apt install -y python3-venv`.
+- Python 3.10 to 3.14, and git. Check with `python3 --version` and `git --version`. macOS ships Python 3.9, which is too old: install 3.12 with `brew install python@3.12` or from [python.org](https://www.python.org/downloads/), and type `python3.12` where the steps say `python3`. On Ubuntu and in WSL, also run `sudo apt install -y python3-venv`.
+- Python 3.15 also works, but `pip install` has to compile `pydantic-core`, which had no ready-made 3.15 build on 2026-10-02. That adds a few minutes and needs a C compiler. A Mac has one if `git --version` works. If `pip install` fails on `pydantic-core`, use Python 3.14 or older.
 - A credit card or PayPal account for sign-up. Akamai uses it to verify you. The credit pays for what the kit uses.
 - Your team's inference key from the organizers. It starts with `hk_`.
 - About 15 minutes

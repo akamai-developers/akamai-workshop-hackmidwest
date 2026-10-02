@@ -2,6 +2,21 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.3] - 2026-10-02
+
+Checks for the Python a student brings, from 3.10 to 3.15.
+
+### Changed
+
+- The pre-work asks for Python 3.10 to 3.14 instead of "3.10 or newer", and says what happens on 3.15: `pip install` compiles `pydantic-core`, which takes a few more minutes and a C compiler, and fails without one.
+- The README's quick start makes `.env` only when there is none: `[ -f .env ] || cp .env.example .env`. Before, pasting the block a second time replaced `.env` with the example and lost the bucket's secret key, which Akamai shows only once, and the `OBJ_KEY_ID` that `scripts/down.sh` needs to revoke the key. The README also says that a new terminal only needs `source .venv/bin/activate`.
+
+### Verified
+
+- In clean `python:3.X-slim` containers with no compiler, `pip install -r requirements.txt` installed from ready-made wheels on Python 3.10.22, 3.11.17, 3.12.14, 3.13.16, and 3.14.8, in 23 to 37 seconds. On each one, the 80 tests passed and `python -m agent --once "Say hello"` answered from the live endpoint. 3.13 and 3.14 get the same 133 packages as 3.12. On older versions pip picks some older releases: numpy 2.4.6 on 3.11, and numpy 2.2.6 and IPython 8.39.0 on 3.10.
+- For the same versions, every package with compiled code has a wheel for Linux x86_64 and for Macs with Apple silicon. On Intel Macs, `argon2-cffi-bindings` 26.1.0, which Jupyter needs, has no wheel, so pip builds it. That build took 6 seconds with only a C compiler.
+- On Python 3.15.0rc2 with no compiler, `pip install` failed after 38 seconds on `pydantic-core` 2.46.5, which has no 3.15 wheel. With a C compiler, pip fetched Rust by itself and the install finished in 110 seconds. Then the 80 tests passed and the agent answered. `MarkupSafe` 3.0.3 and `PyYAML` 6.0.3 also had no 3.15 wheels. An upper bound on `requires-python` would stop pip in 3 seconds with a one-line message, but it would also block 3.15 laptops that install fine, so the kit does not add one.
+
 ## [0.6.2] - 2026-10-02
 
 Fixes from a fresh review of the agent code.

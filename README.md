@@ -28,16 +28,16 @@ Each path ends with a small AI agent running on your own Akamai Cloud account. T
 
 ## Quick start
 
-After the [pre-work](docs/00_prework.md), from the repository folder:
+From the repository folder, steps 2 and 3 of the [pre-work](docs/00_prework.md) in one block:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+[ -f .env ] || cp .env.example .env
 ```
 
-Paste your team key into `.env` with `nano .env`, then ask the agent something:
+The last line makes `.env` only if you have none, so it never wipes keys you already pasted. In a new terminal, you only need `source .venv/bin/activate`. Paste your team key into `.env` with `nano .env`, then ask the agent something:
 
 ```bash
 python -m agent --once "Say hello"
