@@ -34,9 +34,16 @@ By the end of this guide you will be able to:
 ## Prerequisites
 
 - [Guide 01](01_knowledge.md) and [guide 02](02_memory.md) done. On the 30-minute path without a database, skip step 5.
-- An SSH key at `~/.ssh/id_ed25519.pub` (see the [pre-work](00_prework.md), step 5)
-- Your database id and laptop address from guide 01, step 1 (this guide uses `533120` and `$MY_IP`)
+- An SSH key at `~/.ssh/id_ed25519.pub` (see the [pre-work](00_prework.md), step 6)
 - About 20 minutes
+
+Commands in this guide use two shell variables: your laptop's public address and your database's id. Set them first, in the terminal you will use. On the 30-minute path, `DB_ID` comes back empty, which is fine.
+
+```bash
+MY_IP=$(curl -s https://api.ipify.org)
+DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
+echo $MY_IP $DB_ID
+```
 
 ## Step 1: Create the Cloud Firewall
 
@@ -61,7 +68,11 @@ linode-cli firewalls create \
 └───────────┴────────────────┴─────────┘
 ```
 
-Keep the id for step 3. In Cloud Manager, open **Firewalls**: `hackmidwest-fw` is listed with one inbound rule.
+In Cloud Manager, open **Firewalls**: `hackmidwest-fw` is listed with one inbound rule. Step 3 needs its id; look it up by label:
+
+```bash
+FW_ID=$(linode-cli firewalls list --label hackmidwest-fw --text --no-headers --format id)
+```
 
 ## Step 2: Read the cloud-init file
 
@@ -97,7 +108,7 @@ linode-cli linodes create \
   --image linode/ubuntu24.04 \
   --root_pass "$(openssl rand -base64 32)" \
   --authorized_keys "$(cat ~/.ssh/id_ed25519.pub)" \
-  --firewall_id 187247005 \
+  --firewall_id $FW_ID \
   --metadata.user_data "$(base64 < deploy/cloud-init.yaml | tr -d '\n')" \
   --format id,label,status,ipv4
 ```
@@ -112,10 +123,11 @@ The fields that matter: `g6-standard-1` has 1 CPU and 2 GB of memory for $0.018 
 └───────────┴───────────────────┴──────────────┴──────────────┘
 ```
 
-Keep the address in a variable:
+Keep the address in a variable. This looks it up by label, so it also works in a new terminal:
 
 ```bash
-LINODE_IP=198.51.100.7
+LINODE_IP=$(linode-cli linodes list --label hackmidwest-agent --text --no-headers --format ipv4)
+echo $LINODE_IP
 ```
 
 In Cloud Manager, open **Linodes**: `hackmidwest-agent` goes from Provisioning to Running in about a minute and a half. Its **Network** tab shows `hackmidwest-fw`.
@@ -139,8 +151,8 @@ If SSH says "Connection refused", the Linode is still booting. Try again in 20 s
 The database still accepts only your laptop. The update below replaces the whole allow list, so it names both addresses.
 
 ```bash
-linode-cli databases postgresql-update 533120 --allow_list "$MY_IP/32" --allow_list "$LINODE_IP/32"
-linode-cli databases postgresql-view 533120 --format allow_list
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$LINODE_IP/32"
+linode-cli databases postgresql-view $DB_ID --format allow_list
 ```
 
 ```
@@ -151,7 +163,7 @@ linode-cli databases postgresql-view 533120 --format allow_list
 └──────────────────────────────────┘
 ```
 
-Skip this step if you have no database. In a new terminal, `$MY_IP` is empty; get it again with `MY_IP=$(curl -s https://api.ipify.org)`.
+Skip this step if you have no database.
 
 ## Step 6: Copy the code and start the containers
 
@@ -210,7 +222,11 @@ curl http://$LINODE_IP:8000/health
 {"status":"ok","brain":{"state":"live","detail":"hackathon-chat at https://ws.akamai-workshops.com/v1"},"knowledge":{"state":"live","detail":"bucket hackmidwest-e02dabda at us-sea-1.linodeobjects.com"},"memory":{"state":"live","detail":"PostgreSQL 17.11 at a123456-akamai-prod-1234567-default.g2a.akamaidb.net:15268, pgvector 0.8.6"},"reflexes":{"state":"live","detail":"Valkey 8.1.10 at valkey:6379: embedding cache, 20 messages a minute per session"}}
 ```
 
-Every role says `live`. If `memory` says `error`, the allow list change from step 5 has not reached the database yet; wait a minute and run `ssh root@$LINODE_IP "cd /opt/hackmidwest && docker compose restart agent"`.
+Every role says `live`. If `memory` says `error`, the allow list change from step 5 has not reached the database yet; wait a minute and run `ssh root@$LINODE_IP "cd /opt/hackmidwest && docker compose restart agent"`. If `/health` does not answer at all, read the agent's log:
+
+```bash
+ssh root@$LINODE_IP "cd /opt/hackmidwest && docker compose logs agent"
+```
 
 Now ask the deployed agent the question you saved from your laptop in guide 02:
 
@@ -225,46 +241,9 @@ curl -X POST http://$LINODE_IP:8000/chat -H "Content-Type: application/json" \
 
 Your laptop saved that fact and the Linode recalled it, because both talk to the same database. Open `http://<your Linode address>:8000` in a browser for the chat page. It shows the same four roles at the top.
 
-## Step 8: Restart and check that memory survives
+> NOTE: The agent has no login. Anyone who finds this address can chat with it, spend your team's quota, and read the facts it saved. That is fine for a demo; see "What this kit is not" in the [README](../README.md#what-this-kit-is-not).
 
-Tell the agent something:
-
-```bash
-curl -X POST http://$LINODE_IP:8000/chat -H "Content-Type: application/json" \
-  -d '{"session_id": "web-before-restart", "message": "Remember that our table number is 12."}'
-```
-
-```json
-{"reply":"Got it, table number 12 is saved.","tools_used":["remember"]}
-```
-
-Restart both containers:
-
-```bash
-ssh root@$LINODE_IP "cd /opt/hackmidwest && docker compose restart"
-```
-
-```
- Container hackmidwest-valkey-1  Restarting
- Container hackmidwest-agent-1  Restarting
- Container hackmidwest-valkey-1  Started
- Container hackmidwest-agent-1  Started
-```
-
-Give the agent ten seconds to start, then ask from a different conversation:
-
-```bash
-curl -X POST http://$LINODE_IP:8000/chat -H "Content-Type: application/json" \
-  -d '{"session_id": "web-after-restart", "message": "What table are we at?"}'
-```
-
-```json
-{"reply":"You're at table 12.","tools_used":["recall"]}
-```
-
-Between those two replies the agent process was replaced. The fact lived in PostgreSQL the whole time.
-
-## Step 9: Read the code you just used
+## Step 8: Read the code you just used
 
 Open `agent/server.py`. The web front is three routes around the same brain the terminal uses:
 
@@ -294,19 +273,28 @@ def health(request: Request) -> dict:
 - `curl http://$LINODE_IP:8000/health` shows four roles, all `live` (or `memory` as `fallback` on the 30-minute path).
 - The chat page at `http://<your Linode address>:8000` answers "Where can I park?" from `parking.md`.
 - `ssh root@$LINODE_IP "cd /opt/hackmidwest && docker compose ps"` shows `agent` and `valkey` up.
+- Optional: restart both containers with `ssh root@$LINODE_IP "cd /opt/hackmidwest && docker compose restart"`, wait ten seconds, and ask "When is our demo slot?" again. The answer still comes back, from PostgreSQL.
 
 **Show the judges:** open `http://<your Linode address>:8000/health` in front of them. It names the bucket, the database, and Valkey the agent is using. In Cloud Manager, **Linodes** shows `hackmidwest-agent` in Seattle, and **Firewalls** shows `hackmidwest-fw` attached to it.
 
 ## Clean up
 
-Delete the Linode first, then the firewall, using your ids:
+Look up the ids by label, then delete the Linode first and the firewall second:
 
 ```bash
-linode-cli linodes delete 107237550
-linode-cli firewalls delete 187247005
+LINODE_ID=$(linode-cli linodes list --label hackmidwest-agent --text --no-headers --format id)
+FW_ID=$(linode-cli firewalls list --label hackmidwest-fw --text --no-headers --format id)
+linode-cli linodes delete $LINODE_ID
+linode-cli firewalls delete $FW_ID
 ```
 
-Then take the Linode's address off the database's allow list, or delete the database as in guide 02. Cloud Manager's **Linodes** and **Firewalls** pages should no longer list them. Left running, the Linode costs $0.018 an hour, up to $12 a month, even when it is powered off. The firewall is free.
+If you keep the database, take the Linode's address off its allow list. Akamai gives freed addresses to other customers. This leaves only your laptop:
+
+```bash
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32"
+```
+
+Cloud Manager's **Linodes** and **Firewalls** pages should no longer list them. Left running, the Linode costs $0.018 an hour, up to $12 a month, even when it is powered off. The firewall is free.
 
 To delete everything from guides 01 to 03 at once, run `bash scripts/down.sh`.
 

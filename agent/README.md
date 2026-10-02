@@ -64,6 +64,31 @@ Then in `Tools.run()`:
 
 Restart the agent and ask "Where does Byte Club sit?". The terminal shows `[tool] find_table({"team": "Byte Club"})` before the answer.
 
+## Read other file types
+
+The agent reads `.md` and `.txt` files. To read PDFs, add `pypdf` to `agent/requirements.txt` and `requirements.txt`, add `".pdf"` to `TEXT_FILES` in `knowledge.py`, and extract the text in `Bucket.read()`:
+
+```python
+    def read(self, key: str) -> str:
+        body = self.s3.get_object(Bucket=self.name, Key=key)["Body"].read()
+        if key.lower().endswith(".pdf"):
+            from io import BytesIO
+            from pypdf import PdfReader
+            return "\n\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(body)).pages)
+        return body.decode("utf-8", errors="replace")
+```
+
+`scripts/upload.py` checks `TEXT_FILES` too, so PDFs upload once the extension is in the list. Scanned PDFs have no text to extract; they need OCR first.
+
+## Before you put real data in it
+
+The kit is built for a weekend demo. These are the first things to change for anything more:
+
+- **Add a login.** `POST /chat` answers anyone who can reach port 8000, and anyone can read the facts saved with `remember`. Put an API key check in `server.py`, or restrict the Cloud Firewall rule for port 8000 to the addresses that should reach it.
+- **Verify the database's certificate.** `sslmode=require` encrypts the connection but does not check who answers. `linode-cli databases postgresql-ssl-cert <database-id>` returns the CA certificate, base64-encoded. Save it decoded as `ca.crt` and use `sslmode=verify-full&sslrootcert=ca.crt` in `DATABASE_URL`.
+- **Use an application user.** Akamai's docs say `akmadmin` and `defaultdb` are for administration. Create a database and a user with only the rights the agent needs.
+- **Plan for more vectors.** pgvector with an HNSW index handles hundreds of thousands of chunks. The managed PostgreSQL also offers the `vectorscale` extension (0.9.0 on 2026-10-02) for larger collections.
+
 ## Swap the model provider
 
 The brain talks to any server that speaks the OpenAI chat completions API with tool calling. Change three lines in `.env`:

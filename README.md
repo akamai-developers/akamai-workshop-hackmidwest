@@ -6,7 +6,7 @@
 
 # Akamai Cloud agent starter kit for HackMidwest
 
-A small AI agent that runs on your own Akamai Cloud account. You build it in 45 minutes, then replace its tools and documents with your idea.
+A small AI agent that runs on your own Akamai Cloud account. You build it in 45 minutes, then replace its tools and documents with your idea. You type each command yourself, because the goal is to be able to create these services for your own project.
 
 ```
   your laptop                         Akamai Cloud (us-sea, Seattle)
@@ -23,16 +23,8 @@ A small AI agent that runs on your own Akamai Cloud account. You build it in 45 
 | Path | Time | What you do |
 |---|---|---|
 | **Guided** | 45 minutes | Do the [pre-work](docs/00_prework.md) the night before. On the day, follow guides [01](docs/01_knowledge.md), [02](docs/02_memory.md), and [03](docs/03_body.md). You type each `linode-cli` command yourself and watch each resource appear in Cloud Manager. You finish with the agent on your Linode, using every service in the picture. |
-| **Fast** | 30 minutes | Do the pre-work, then run three scripts that replay the guides' commands: Object Storage, a Linode, and a Cloud Firewall, without the managed database. Add the database later: guide 01, step 1, then guide 02. |
+| **Fast** | 30 minutes | Do the pre-work, then run [three scripts](#the-30-minute-path-and-rebuilding) that replay the guides' commands: Object Storage, a Linode, and a Cloud Firewall, without the managed database. |
 | **Self-serve** | 15 minutes each | Optional modules: [Kubernetes on LKE](docs/04_lke.md), [Valkey reflexes](docs/05_valkey.md), and the five [inference notebooks](#brain-the-inference-notebooks). |
-
-The fast path, from the repository folder with the virtual environment active:
-
-```bash
-bash scripts/up.sh --no-db                     # bucket and its access key, written to .env
-python scripts/upload.py docs/sample/*.md      # the sample documents, into the bucket
-bash scripts/deploy_linode.sh                  # firewall, Linode, Docker, the agent; prints its URL
-```
 
 ## Quick start
 
@@ -42,12 +34,16 @@ After the [pre-work](docs/00_prework.md), from the repository folder:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env                  # then paste your team key into .env
-python -m agent --once "Say hello"    # one answer, then exit
-python -m agent                       # chat in the terminal; type exit to quit
+cp .env.example .env
 ```
 
-The agent prints one status line per role when it starts. Lines that say `fallback` or `off` are the Akamai services you have not connected yet.
+Paste your team key into `.env` with `nano .env`, then ask the agent something:
+
+```bash
+python -m agent --once "Say hello"
+```
+
+`python -m agent` without `--once` starts a chat in the terminal; type `exit` to quit. The agent prints one status line per role when it starts. Lines that say `fallback` or `off` are the Akamai services you have not connected yet.
 
 ## The challenge checklist
 
@@ -77,6 +73,26 @@ The fastest proof is the agent itself: `http://<your Linode address>:8000/health
 
 Measured on 2026-10-02: the database was active 6 minutes after it was created, and `scripts/deploy_linode.sh` had the agent answering on its Linode 3 minutes 9 seconds after it started. [agent/README.md](agent/README.md) explains the code, and every link the guides rely on is in [docs/links.md](docs/links.md).
 
+## The 30-minute path and rebuilding
+
+The scripts in `scripts/` run the same commands as the guides. Use them for the fast path, or to rebuild after you have done the guides once. From the repository folder with the virtual environment active:
+
+```bash
+bash scripts/up.sh --no-db
+python scripts/upload.py docs/sample/*.md
+bash scripts/deploy_linode.sh
+```
+
+The first creates the bucket and its access key and writes them to `.env`. The second uploads the sample documents. The third creates the firewall and the Linode, installs Docker, starts the agent, and prints its address. To add the database later, do guide 01, step 1, then guide 02, then run `bash scripts/deploy_linode.sh` again so the Linode gets the new `.env`.
+
+## What this kit is not
+
+- **Not private.** Port 8000 on your Linode is open to anyone, with no login. Anyone who finds the address can chat with your agent, spend your team's inference quota, and read the facts it saved.
+- **Not abuse-proof.** The rate limit counts messages per session id, and a client can make a new session id at any time.
+- **Not production.** One Linode, one database node, and no backups of your own beyond what Managed Databases keeps.
+
+Fine for a hackathon demo. Before you put real data in it, add a login in front of `/chat` and restrict the firewall.
+
 ## Cost and teardown
 
 The guided stack costs about $0.05 an hour, or $1.19 a day, which the $300 credit covers many times over. [docs/costs.md](docs/costs.md) lists the price of every resource, read from the API with `linode-cli`.
@@ -87,7 +103,7 @@ Akamai bills a resource until you delete it, even when it is powered off. Each g
 bash scripts/down.sh
 ```
 
-It finds each `hackmidwest-*` resource by its exact name, shows the list, and deletes them when you type `yes`. It never touches anything else on your account. Object Storage itself keeps billing $5 a month until you cancel it in Cloud Manager, because cancelling deletes every bucket on the account.
+It finds each `hackmidwest-*` resource by its exact name, shows the list, and deletes them when you type `yes`. It never touches anything else on your account. Two things stay: Object Storage itself keeps billing $5 a month until you cancel it in Cloud Manager, because cancelling deletes every bucket on the account; and the access key that `linode-cli obj` made for itself, named `linode-cli-<you>@<computer>-<number>`, stays under **Object Storage > Access Keys** until you revoke it there.
 
 ## Brain: the inference notebooks
 

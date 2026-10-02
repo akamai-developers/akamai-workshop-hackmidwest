@@ -12,6 +12,19 @@ Phase 5, in progress: the optional LKE module. Not yet run on a live cluster.
 - `scripts/deploy_lke.sh`: a one-node LKE cluster, the kubeconfig, the NodeBalancer, the Secret from `.env`, the code ConfigMap, the database allow list, and a wait for `/health` through the NodeBalancer.
 - `docs/04_lke.md`, with each step that needs a live cluster marked unverified.
 - `scripts/down.sh` also deletes `hackmidwest-nb` and the local kubeconfig.
+- `tests/test_scripts.py`: every script parses, and the `.env` helpers in `scripts/lib.sh` run for real, including reading a missing key under `set -e`, the bug that stopped `scripts/up.sh` in the first live run.
+
+### Changed
+
+After a teachability review of the guides:
+
+- No comments inside command blocks. On macOS, zsh does not treat `#` as a comment at the prompt, so a pasted inline comment broke `linode-cli obj rb` and the README quick start.
+- Ids come from lookups by label, such as `linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id`, so commands work in a new terminal and nobody pastes an example id. No `<placeholder>` remains inside a command.
+- The pre-work gets the agent answering at step 3, and covers Python 3.9 on macOS and the missing `python3-venv` on Ubuntu and WSL.
+- Guide 02 shows forgetting with the same session in a new process, so the process is the only thing that changes.
+- Guide 03 drops the restart step, which repeated guide 02's lesson, and adds the agent's log command and the allow-list clean-up. Guide 04 adds `--timeout=600s` to the rollout and `COPYFILE_DISABLE=1` to the tarball for macOS. Guide 05 sends the 21 requests in parallel, so they land in one minute: 20 answered, 1 refused, tested on 2026-10-02.
+- The README gains "What this kit is not" and moves the scripts below the guides. `agent/README.md` gains PDF support and the first changes to make before real data.
+- `scripts/check_links.sh` also checks that every `#anchor` matches a heading.
 
 ### Verified
 

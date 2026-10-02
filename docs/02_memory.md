@@ -34,12 +34,11 @@ By the end of this guide you will be able to:
 ## Prerequisites
 
 - [Guide 01](01_knowledge.md) done, with the database from its step 1
-- Your database id from guide 01, step 1 (this guide uses `533120`; use yours)
 - About 10 minutes
 
 ## Step 1: Watch the agent forget
 
-The agent has a `remember` tool. Ask it to keep a fact, then ask for that fact as a teammate would, from a new process and a different session:
+The agent has a `remember` tool. Ask it to keep a fact, then ask for that fact from a new process:
 
 ```bash
 python -m agent --once "Remember that our demo slot is 2:15 PM."
@@ -55,20 +54,18 @@ Got it, your demo slot is 2:15 PM.
 ```
 
 ```bash
-python -m agent --once "When is our demo slot?" --session teammate
+python -m agent --once "When is our demo slot?"
 ```
 
 The same four status lines print first. They are left out of the outputs below.
 
 ```
-  [tool] recall({"query": "demo slot time"})
-  [tool] search_docs({"query": "demo slot schedule time"})
-I don't have your specific demo slot saved, and the schedule doesn't list individual team times. According to schedule.md, judging runs Sunday from 1:00 PM to 3:30 PM, and teams demo at their tables in the order shown on the screen. So your exact slot will be posted on that screen during judging.
-
-If you tell me your team name and assigned time, I can save it so I can answer this faster next time.
+Let me check what I have saved about your team.
+  [tool] recall({"query": "demo slot time team"})
+I don't have a saved demo slot for your team yet. Could you tell me your team name or the time you were assigned? I can save it so I can answer this faster next time.
 ```
 
-The first process saved the fact in a Python list and exited. The second process started with an empty list. `--session teammate` is a second conversation, as if a teammate asked from their laptop.
+Same conversation, new process. The first process saved the fact in a Python list, and the list ended with the process. The second process started with nothing.
 
 ## Step 2: Check that the database is ready
 
@@ -76,10 +73,11 @@ The first process saved the fact in a Python list and exited. The second process
 linode-cli databases postgresql-list --label hackmidwest-db --format id,label,status
 ```
 
-The status must be `active`. While it says `provisioning`, wait a minute and ask again. Then read where the database lives:
+The status must be `active`. While it says `provisioning`, wait a minute and ask again. Then put its id in a variable, the same lookup as in guide 01, and read where the database lives:
 
 ```bash
-linode-cli databases postgresql-view 533120 --format status,hosts.primary,port
+DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
+linode-cli databases postgresql-view $DB_ID --format status,hosts.primary,port
 ```
 
 ```
@@ -95,7 +93,7 @@ linode-cli databases postgresql-view 533120 --format status,hosts.primary,port
 ## Step 3: Read the password
 
 ```bash
-linode-cli databases postgresql-creds-view 533120
+linode-cli databases postgresql-creds-view $DB_ID
 ```
 
 ```
@@ -110,13 +108,13 @@ linode-cli databases postgresql-creds-view 533120
 
 ## Step 4: Write DATABASE_URL
 
-A PostgreSQL connection string puts all of it in one line. Add it to `.env` with your password, host, and port:
+A PostgreSQL connection string puts all of it in one line. Add it to `.env` with your password, host, and port, for example with `nano .env`:
 
-```bash
+```ini
 DATABASE_URL=postgresql://akmadmin:<password>@a123456-akamai-prod-1234567-default.g2a.akamaidb.net:15268/defaultdb?sslmode=require
 ```
 
-`defaultdb` is the database Akamai creates on the server. `sslmode=require` makes the connection use TLS, and the server refuses connections without it. A stricter mode, `verify-full`, also checks the server's certificate; `linode-cli databases postgresql-ssl-cert 533120` gives you the certificate it needs.
+`defaultdb` is the database Akamai creates on the server. `sslmode=require` makes the connection use TLS, and the server refuses connections without it.
 
 > NOTE: If the host name does not resolve yet, wait two minutes. A brand-new database can be `active` before its name is in DNS. If your password ever contains characters other than letters, digits, `-`, and `_`, percent-encode them or use `scripts/status.sh`, which does it for you.
 
@@ -144,11 +142,11 @@ CREATE INDEX IF NOT EXISTS documents_embedding_idx ON documents USING hnsw (embe
 
 `vector(1024)` matches the 1,024 numbers the embedding model returns. The HNSW index keeps the search fast once you have thousands of chunks. Every statement says `IF NOT EXISTS`, so running the script twice is safe.
 
-Tested on 2026-10-02: `CREATE EXTENSION vector` works for `akmadmin` on Akamai Managed PostgreSQL 17. The server also offers `vectorscale` 0.9.0 if you outgrow plain pgvector.
+Tested on 2026-10-02: `CREATE EXTENSION vector` works for `akmadmin` on Akamai Managed PostgreSQL 17.
 
 ## Step 6: Ask again
 
-Repeat step 1. The status line now says `live`:
+Save the fact again. The memory line now says `live`:
 
 ```bash
 python -m agent --once "Remember that our demo slot is 2:15 PM."
@@ -163,6 +161,8 @@ reflexes   off       no cache and no rate limit. Set VALKEY_URL to turn them on.
 Got it, your demo slot is 2:15 PM.
 ```
 
+This time ask from a different conversation as well as a new process, as a teammate on another laptop would. `--session teammate` picks a second conversation:
+
 ```bash
 python -m agent --once "When is our demo slot?" --session teammate
 ```
@@ -172,7 +172,7 @@ python -m agent --once "When is our demo slot?" --session teammate
 Your demo slot is at 2:15 PM.
 ```
 
-A new process, a different conversation, and the fact is there. The conversation itself is stored too. Ask in the first session, from yet another process:
+The fact outlived the process that saved it, and a second conversation found it. The conversation itself is stored too. Ask in the first session, from yet another process:
 
 ```bash
 python -m agent --once "What was the last thing I asked you?"
@@ -225,12 +225,13 @@ For your project, add tables in a new file such as `agent/sql/002_tasks.sql` and
 
 ## Clean up
 
-Going on to guide 03? Keep the database. The Linode in guide 03 uses it too.
+If you go on to guide 03, keep the database. The Linode in guide 03 uses it too.
 
-To delete it, with your database id:
+To delete it:
 
 ```bash
-linode-cli databases postgresql-delete 533120
+DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
+linode-cli databases postgresql-delete $DB_ID
 ```
 
 Then empty `DATABASE_URL` in `.env`. Cloud Manager's **Databases** page no longer lists it. Left running, the database costs $0.024 an hour, up to $16 a month. Deleting it deletes every conversation, vector, and note in it.

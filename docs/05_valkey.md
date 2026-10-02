@@ -35,8 +35,15 @@ By the end of this module you will be able to:
 
 ## Prerequisites
 
-- [Guide 03](03_body.md) done, with `LINODE_IP` set to your Linode's address
+- [Guide 03](03_body.md) done
 - About 15 minutes
+
+Set your Linode's address in a variable first. The lookup works in any terminal:
+
+```bash
+LINODE_IP=$(linode-cli linodes list --label hackmidwest-agent --text --no-headers --format ipv4)
+echo $LINODE_IP
+```
 
 ## Step 1: Find the reflexes in the status
 
@@ -54,44 +61,44 @@ The last role in the reply is Valkey:
 
 ## Step 2: Look inside Valkey
 
-Ask the agent a question or two in the chat page, then list Valkey's keys from the Linode:
+Send one message, then list Valkey's keys from the Linode right away. Run both lines together: the counter for the message expires after 60 seconds.
 
 ```bash
+curl -s -o /dev/null -X POST http://$LINODE_IP:8000/chat -H "Content-Type: application/json" -d '{"session_id": "valkey-demo", "message": "Where can I park?"}'
 ssh root@$LINODE_IP "cd /opt/hackmidwest && docker compose exec -T valkey valkey-cli --scan"
 ```
 
 ```
-rate:judge-demo:29848408
-rate:web-before-restart:29848409
-vector:hackathon-embedding:<64 hexadecimal characters>
+rate:valkey-demo:29848454
 vector:hackathon-embedding:<64 hexadecimal characters>
 ```
 
-That is part of the list from the test run on 2026-10-02, with the long hashes replaced. Your session names and hashes differ. A `rate:` key counts one conversation's messages in one minute; the number at the end is that minute, counted since 1970. Each counter expires 60 seconds after its first message. A `vector:` key holds the vector of one question text, named by the SHA-256 hash of the text, and expires after a day.
+That is part of the list from a test run on 2026-10-02, with the long hash replaced. Earlier chats add more keys. `rate:valkey-demo:29848454` counts the messages of the `valkey-demo` conversation in one minute; the number at the end is that minute, counted since 1970. `vector:hackathon-embedding:...` holds the vector for the text "Where can I park?", named by the SHA-256 hash of that text, and expires after a day. Ask the same question again within a day and the agent skips the embedding request.
 
 ## Step 3: Trip the rate limit
 
-Send 21 messages from one conversation as fast as you can. Each of the first 20 costs one model request, so keep the message short:
+Send 21 messages from one conversation at the same moment. The `&` starts each request in the background, so all 21 land within the same minute, and `sort | uniq -c` counts the answers by status code:
 
 ```bash
 for i in $(seq 1 21); do
-  curl -s -o /dev/null -w "%{http_code} " -X POST http://$LINODE_IP:8000/chat \
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST http://$LINODE_IP:8000/chat \
     -H "Content-Type: application/json" \
-    -d '{"session_id": "rate-demo", "message": "Reply with the single word OK."}'
-done; echo
+    -d '{"session_id": "rate-demo", "message": "Reply with the single word OK."}' &
+done | sort | uniq -c
 ```
 
 ```
-200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 429
+     20 200
+      1 429
 ```
 
-The 21st message got HTTP 429 Too Many Requests, and the model never saw it. The body explains:
+Twenty messages got an answer and one got HTTP 429 Too Many Requests without reaching the model. Its body says why:
 
 ```json
 {"detail":"This conversation sent 20 messages in the last minute. Wait a moment and try again."}
 ```
 
-Other conversations are not affected. If the loop crosses into a new minute, the count starts over and all 21 succeed; run it again.
+Other conversations are not affected. The 20 answered messages each cost one model request, a third of your team's 60 a minute, so run this once.
 
 ## Step 4: Read the code you just used
 
@@ -156,8 +163,8 @@ Keep the container while the cache and the counters are the only things in Valke
 ## Validation
 
 - `/health` shows `reflexes` as `live`.
-- `valkey-cli --scan` on the Linode lists `rate:` and `vector:` keys.
-- The 21-message loop ends with `429`.
+- Step 2 lists a `vector:` key for the question you sent. `rate:` keys show only within a minute of a message.
+- The 21-message loop counts 20 answers with `200` and one `429`.
 
 **Show the judges:** the `reflexes live` line on the chat page and at `/health`, and the 429 from step 3. Valkey runs on the Linode, so the Linode in Cloud Manager, **Linodes**, is the Akamai service behind it.
 

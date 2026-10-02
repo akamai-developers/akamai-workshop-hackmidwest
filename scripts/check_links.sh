@@ -43,16 +43,30 @@ grep -ohE 'https?://[^] )>"`'"'"'|]+' $files | sed -E 's/[.,;:]+$//' | sort -u |
   fi
 done
 
+# The anchors GitHub makes from a file's headings: lowercase, punctuation dropped, spaces to hyphens.
+anchors() {
+  awk '/^```/{code = !code} !code && /^#+ /' "$1" | sed -E 's/^#+ //' | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9 _-]//g; s/ /-/g'
+}
+
 echo "Relative links"
 for file in $files; do
   dir=$(dirname "$file")
-  grep -oE '\]\([^)#]+(#[^)]*)?\)' "$file" | sed -E 's/^\]\(//; s/\)$//; s/#.*$//' | while read -r target; do
-    [[ -z $target || $target =~ ^(https?:|mailto:) ]] && continue
-    if [[ -e "$dir/$target" ]]; then
-      echo "  ok   $file -> $target"
+  grep -oE '\]\([^)]+\)' "$file" | sed -E 's/^\]\(//; s/\)$//' | while read -r link; do
+    [[ -z $link || $link =~ ^(https?:|mailto:) ]] && continue
+    target=${link%%#*}
+    anchor=""
+    [[ $link == *"#"* ]] && anchor=${link#*#}
+    path="$dir/$target"
+    [[ -z $target ]] && path=$file
+    if [[ ! -e $path ]]; then
+      echo "  FAIL $file -> $link (no such file)"
+      echo "$file -> $link" >> "$failed"
+    elif [[ -n $anchor && $path == *.md ]] && ! anchors "$path" | grep -qx -- "$anchor"; then
+      echo "  FAIL $file -> $link (no heading for #$anchor)"
+      echo "$file -> $link" >> "$failed"
     else
-      echo "  FAIL $file -> $target (no such file)"
-      echo "$file -> $target" >> "$failed"
+      echo "  ok   $file -> $link"
     fi
   done
 done

@@ -16,7 +16,7 @@ This guide adds **knowledge**: an Object Storage bucket that holds the documents
 
 Right now the agent knows only what the model learned in training. Ask it where to park at your venue and it has nothing to go on. In this guide you give it documents.
 
-Object Storage is Akamai's S3-compatible file storage. You put files in a bucket, and any program with an access key can read them over HTTPS. The agent lists your bucket, cuts each text file into chunks of about 500 words, turns each chunk into a vector of 1,024 numbers with the embedding model, and searches those vectors by meaning when you ask a question.
+Object Storage is Akamai's S3-compatible file storage. You put files in a bucket, and any program with an access key can read them over HTTPS. The agent reads every text file in your bucket and cuts it into chunks of about 500 words. The embedding model turns each chunk into a vector of 1,024 numbers. When you ask a question, the agent searches those vectors by meaning.
 
 You create three things by hand with `linode-cli`: the database, the bucket, and an access key that can reach only that bucket. Then you watch the agent fail on an empty bucket, upload a file, and watch it answer.
 
@@ -71,7 +71,18 @@ The fields that matter: `--type g6-nanode-1` is the smallest plan, 1 GB of memor
 └────────┴────────────────┴────────┴─────────────┴──────────────┴────────────┴─────────┴───────────────┴──────────────┘
 ```
 
-Note the `id`. In Cloud Manager, open **Databases**: `hackmidwest-db` is there with the status Provisioning. Do not wait for it. Move on.
+In Cloud Manager, open **Databases**: `hackmidwest-db` is there with the status Provisioning. Keep its id in a variable for later commands. This looks it up by label, so it works in any terminal:
+
+```bash
+DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
+echo $DB_ID
+```
+
+```
+533120
+```
+
+Do not wait for the database. Move on.
 
 > NOTE: On venue Wi-Fi, everyone shares one public address, so the allow list admits the whole venue network. The database still requires your password and TLS. Guide 03 adds your Linode's address to the list.
 
@@ -113,7 +124,7 @@ linode-cli object-storage keys-create \
   --text --format id,access_key,secret_key
 ```
 
-`--bucket_access` lists the buckets the key may touch: one bucket in `us-sea`, with `read_write` permission. `--text` prints plain columns, so a narrow terminal cannot cut off the secret.
+`--bucket_access` lists the buckets the key may touch: one bucket in `us-sea`, with `read_write` permission. `--text` prints plain columns, so a narrow terminal cannot cut off the secret. Paste this command instead of typing it; the backslashes and quotes are easy to get wrong.
 
 ```
 id	access_key	secret_key
@@ -134,9 +145,9 @@ linode-cli object-storage endpoints --text --format region,endpoint_type,s3_endp
 us-sea	E1	us-sea-1.linodeobjects.com
 ```
 
-Open `.env` and fill in the knowledge block with your values:
+Open `.env` in your editor, for example `nano .env`, and fill in the knowledge block with your values:
 
-```bash
+```ini
 OBJ_ENDPOINT=https://us-sea-1.linodeobjects.com
 OBJ_BUCKET=hackmidwest-e02dabda
 OBJ_ACCESS_KEY=ABCDEFGHIJKLMNOPQRST
@@ -246,7 +257,7 @@ class Knowledge:
 
 To use your own data, change these:
 
-- `TEXT_FILES` at the top of the file lists the extensions the agent reads: `.md` and `.txt`. For PDFs, extract the text in `Bucket.read()` with a library such as `pypdf`.
+- `TEXT_FILES` at the top of the file lists the extensions the agent reads: `.md` and `.txt`. [agent/README.md](../agent/README.md) shows how to add PDFs.
 - `CHUNK_WORDS` sets the chunk size. Smaller chunks give more precise matches and less context per match.
 - `Bucket` reads through boto3, the AWS SDK for Python. Any S3 code you find works against Akamai Object Storage with the endpoint URL from step 4.
 
@@ -260,14 +271,17 @@ To use your own data, change these:
 
 ## Clean up
 
-Going on to guide 02? Keep everything. The database is still building.
+If you go on to guide 02, keep everything. The database is still building.
 
-To delete what this guide created, use the bucket name and the ids from steps 1 to 3:
+To delete what this guide created, read the names and ids back from `.env` and your account, then delete the bucket and every file in it, the agent's access key, and the database:
 
 ```bash
-linode-cli obj rb $BUCKET --recursive --cluster us-sea-1    # the bucket and every file in it
-linode-cli object-storage keys-delete 6635050               # the agent's access key
-linode-cli databases postgresql-delete 533120               # the database
+BUCKET=$(grep '^OBJ_BUCKET=' .env | cut -d= -f2)
+KEY_ID=$(grep '^OBJ_KEY_ID=' .env | cut -d= -f2)
+DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
+linode-cli obj rb $BUCKET --recursive --cluster us-sea-1
+linode-cli object-storage keys-delete $KEY_ID
+linode-cli databases postgresql-delete $DB_ID
 ```
 
 Then empty the `OBJ_*` lines in `.env`. In Cloud Manager, check **Object Storage > Buckets**, **Object Storage > Access Keys**, and **Databases**.
