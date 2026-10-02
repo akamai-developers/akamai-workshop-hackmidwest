@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The safety net: deletes what this kit created, so nothing keeps billing after the event.
-# It looks up each kit resource by its exact hackmidwest- name, shows what it found, and asks
-# you to type yes. Then it deletes them and empties the OBJ_* and DATABASE_URL lines in .env.
+# It looks up each kit resource by its exact hackmidwest- name, and the NodeBalancer behind the
+# LKE agent Service by its address, shows what it found, and asks you to type yes. Then it deletes
+# them and empties the OBJ_* and DATABASE_URL lines in .env.
 # It never lists or touches anything else on your account.
 #   bash scripts/down.sh          asks before deleting
 #   bash scripts/down.sh --yes    deletes without asking

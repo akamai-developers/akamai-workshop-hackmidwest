@@ -6,8 +6,6 @@
 
 # Akamai Cloud agent starter kit for HackMidwest
 
-A small AI agent that runs on your own Akamai Cloud account. You build it in 45 minutes, then replace its tools and documents with your idea. You type each command yourself, because the goal is to be able to create these services for your own project.
-
 ```
   your laptop                         Akamai Cloud (us-sea, Seattle)
   -----------------                   --------------------------------------------------------
@@ -20,9 +18,11 @@ A small AI agent that runs on your own Akamai Cloud account. You build it in 45 
 
 ## Three ways to use this kit
 
+Each path ends with a small AI agent running on your own Akamai Cloud account. Then you replace its tools and documents with your idea.
+
 | Path | Time | What you do |
 |---|---|---|
-| **Guided** | 45 minutes | Do the [pre-work](docs/00_prework.md) the night before. On the day, follow guides [01](docs/01_knowledge.md), [02](docs/02_memory.md), and [03](docs/03_body.md). You type each `linode-cli` command yourself and watch each resource appear in Cloud Manager. You finish with the agent on your Linode, using every service in the picture. |
+| **Guided** | 45 minutes | Do the [pre-work](docs/00_prework.md) the night before. On the day, follow guides [01](docs/01_knowledge.md), [02](docs/02_memory.md), and [03](docs/03_body.md). You type each `linode-cli` command yourself and watch each resource appear in Cloud Manager, so you can create the same services for your own project. You finish with the agent on your Linode, using every service in the picture. |
 | **Fast** | 30 minutes | Do the pre-work, then run [three scripts](#the-30-minute-path-and-rebuilding) that replay the guides' commands: Object Storage, a Linode, and a Cloud Firewall, without the managed database. |
 | **Self-serve** | 15 minutes each | Optional modules: [Kubernetes on LKE](docs/04_lke.md), [Valkey reflexes](docs/05_valkey.md), and the five [inference notebooks](#brain-the-inference-notebooks). |
 

@@ -2,6 +2,22 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-10-02
+
+Phase 6: polish and verification.
+
+### Changed
+
+- The README's first screen is the credit link, the stack picture, and the three paths. Its introduction moved under "Three ways to use this kit".
+- The header of `scripts/down.sh` says how it finds the cluster's NodeBalancer.
+
+### Verified
+
+- 65 tests pass, and `scripts/check_links.sh` passes. It skips four links: three pages on www.akamai.com and www.linode.com, which block scripts, and this repository while it is private.
+- `notebooks/00_quickstart.ipynb` runs against the live endpoint: 9 code cells, no errors. The notebooks in the repository are unchanged.
+- Every guide opens with the stack picture and names its role, and has an Overview, Learning objectives, Prerequisites with minutes, numbered steps, Validation, a Show the judges line, Clean up, and Next steps.
+- No em-dashes and none of the banned words in the Markdown, Python, shell, or YAML files.
+
 ## [0.5.0] - 2026-10-02
 
 Phase 5: the optional LKE module, run live, and a full rehearsal of every guide on Akamai Cloud.
