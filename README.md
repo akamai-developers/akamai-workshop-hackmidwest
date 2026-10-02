@@ -11,7 +11,7 @@
   -----------------                   --------------------------------------------------------
   linode-cli / python  ---creates-->  Linode "hackmidwest-agent" (body)
                                         docker compose
-                                          agent (FastAPI, port 8000)  --tools-->  Object Storage bucket (knowledge)
+                                          agent (FastAPI, port 8000)   --tools-->  Object Storage bucket (knowledge)
                                           valkey (reflexes)            --sql---->  Managed PostgreSQL + pgvector (memory)
                                                                        --https-->  ws.akamai-workshops.com/v1 (brain)
 ```

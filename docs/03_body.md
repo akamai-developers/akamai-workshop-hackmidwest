@@ -5,7 +5,7 @@
   -----------------                   --------------------------------------------------------
   linode-cli / python  ---creates-->  Linode "hackmidwest-agent" (body)
                                         docker compose
-                                          agent (FastAPI, port 8000)  --tools-->  Object Storage bucket (knowledge)
+                                          agent (FastAPI, port 8000)   --tools-->  Object Storage bucket (knowledge)
                                           valkey (reflexes)            --sql---->  Managed PostgreSQL + pgvector (memory)
                                                                        --https-->  ws.akamai-workshops.com/v1 (brain)
 ```
@@ -307,6 +307,8 @@ linode-cli firewalls delete $FW_ID
 If you keep the database, take the Linode's address off its allow list. Akamai gives freed addresses to other customers. This leaves only your laptop:
 
 ```bash
+MY_IP=$(curl -s https://api.ipify.org)
+DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
 linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --format id,label,status
 ```
 

@@ -5,7 +5,7 @@
   -----------------                   --------------------------------------------------------
   linode-cli / python  ---creates-->  Linode "hackmidwest-agent" (body)
                                         docker compose
-                                          agent (FastAPI, port 8000)  --tools-->  Object Storage bucket (knowledge)
+                                          agent (FastAPI, port 8000)   --tools-->  Object Storage bucket (knowledge)
                                           valkey (reflexes)            --sql---->  Managed PostgreSQL + pgvector (memory)
                                                                        --https-->  ws.akamai-workshops.com/v1 (brain)
 ```
@@ -17,6 +17,19 @@ This module swaps the **body**: instead of one Linode running Docker Compose, th
 Kubernetes runs containers for you on a group of machines, restarts them when they fail, and puts a stable address in front of them. LKE is Akamai's managed Kubernetes: Akamai runs the control plane for free on the standard tier, and you pay for the worker nodes, which are ordinary Linodes.
 
 Kubernetes normally pulls your code as a container image from a registry. This module skips the registry so it fits in 15 minutes: the pod starts from the public `python:3.12-slim` image, unpacks your code from a ConfigMap, and installs the agent's packages on start. Your `.env` becomes a Secret. A NodeBalancer, Akamai's load balancer, gives the agent a public address. The cluster creates it for you when you ask for a Service of type LoadBalancer. For the production pattern, with an image in a registry and two replicas, see module 8 of the [solution architect agent workshop](https://github.com/akamai-developers/akamai-workshop-solution-architect-agent/tree/main/workshop/08_deploy_to_lke).
+
+In this module the body looks like this:
+
+```
+  your laptop                         Akamai Cloud (us-sea, Seattle)
+  -----------------                   --------------------------------------------------------
+  kubectl / linode-cli ---creates-->  LKE cluster "hackmidwest-lke" (body)
+                                        NodeBalancer "hackmidwest-nb", port 80
+                                          node: a Linode that the cluster manages
+                                            pod agent (port 8000)      --tools-->  Object Storage bucket (knowledge)
+                                            pod valkey (reflexes)      --sql---->  Managed PostgreSQL + pgvector (memory)
+                                                                       --https-->  ws.akamai-workshops.com/v1 (brain)
+```
 
 Tested on 2026-10-02: the cluster had a Ready node 2 and a half minutes after the create command, and the agent answered through its NodeBalancer 45 seconds after `kubectl apply`.
 
@@ -125,10 +138,10 @@ The node is a Linode that the cluster made and manages. It shows in Cloud Manage
 Everything goes in a namespace, `hackmidwest`, so `kubectl get` shows only this module's objects. Your `.env` becomes a Secret, and a tarball of your code becomes a ConfigMap:
 
 ```bash
-kubectl create namespace hackmidwest
-kubectl -n hackmidwest create secret generic agent-env --from-env-file=.env
+kubectl create namespace hackmidwest --save-config
+kubectl -n hackmidwest create secret generic agent-env --from-env-file=.env --save-config
 COPYFILE_DISABLE=1 tar -czf agent.tgz --exclude=__pycache__ agent docs/sample
-kubectl -n hackmidwest create configmap agent-code --from-file=agent.tgz
+kubectl -n hackmidwest create configmap agent-code --from-file=agent.tgz --save-config
 rm agent.tgz
 ```
 
@@ -138,7 +151,7 @@ secret/agent-env created
 configmap/agent-code created
 ```
 
-`--from-env-file` reads `.env` line by line and skips the comments. `COPYFILE_DISABLE=1` stops macOS from adding hidden `._` files to the tarball; on Linux it does nothing. The tarball of `agent/` and `docs/sample/` was 19 KB on 2026-10-02; a ConfigMap holds up to 1 MiB.
+`--from-env-file` reads `.env` line by line and skips the comment lines. Unlike the agent on your laptop, it keeps quotes and end-of-line comments as part of a value: `OPENAI_API_KEY="hk_..."` would reach the pod with its quotes, and the brain would refuse the key. Remove any quotes around values in `.env` before this step. `--save-config` records what you created, so the `kubectl apply` commands in step 8 and in `scripts/deploy_lke.sh` can change these objects later without a warning. `COPYFILE_DISABLE=1` stops macOS from adding hidden `._` files to the tarball; on Linux it does nothing. The tarball of `agent/` and `docs/sample/` was 19 KB on 2026-10-02; a ConfigMap holds up to 1 MiB.
 
 ## Step 4: Let the node into the database
 
@@ -169,7 +182,11 @@ linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_l
 └────────┴────────────────┴──────────┘
 ```
 
-The database says `updating` for under a minute while the change rolls out.
+The database says `updating` while the change rolls out. The agent connects to it once, when it starts, so wait until this says `active` before step 5. On 2026-10-02 that took under a minute:
+
+```bash
+linode-cli databases postgresql-view $DB_ID --format status
+```
 
 ## Step 5: Deploy
 
@@ -240,6 +257,13 @@ curl -X POST http://$NB_IP/chat -H "Content-Type: application/json" \
 
 If `curl` says it could not connect, the NodeBalancer is still applying its settings. On 2026-10-02 it answered 45 seconds after the Service appeared; 35 seconds was too soon. Wait and run it again.
 
+If `memory` says `error`, the agent started before the allow list change from step 4 reached the database. Restart the agent so it connects again, then run the checks again:
+
+```bash
+kubectl -n hackmidwest rollout restart deployment/agent
+kubectl -n hackmidwest rollout status deployment/agent --timeout=600s
+```
+
 All four roles are live, with `reflexes` at the Valkey Service, `valkey:6379`. The chat answer comes from the same database as before, so the demo slot you saved in guide 02 is still there. Open `http://<NB_IP>` in a browser for the chat page; the NodeBalancer listens on port 80.
 
 ## Step 8: Read the manifest you just used
@@ -273,6 +297,13 @@ rm agent.tgz
 kubectl -n hackmidwest rollout restart deployment/agent
 ```
 
+To change a setting, edit `.env`, then replace the Secret and restart the agent:
+
+```bash
+kubectl -n hackmidwest create secret generic agent-env --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n hackmidwest rollout restart deployment/agent
+```
+
 Installing packages on every start costs half a minute and needs PyPI to be up. That is fine for a hackathon and wrong for production, where you build an image once and push it to a registry, as module 8 of the solution architect agent workshop does.
 
 ## Validation
@@ -286,25 +317,55 @@ Installing packages on every start costs half a minute and needs PyPI to be up. 
 
 ## Clean up
 
-The cluster's node and the NodeBalancer bill by the hour until you delete them. Delete the Service first: the cluster then deletes the NodeBalancer it made, which took a second on 2026-10-02. Then delete the cluster and the kubeconfig:
+The cluster's node and the NodeBalancer bill by the hour until you delete them. Delete the Service first: the cluster then deletes the NodeBalancer it made, which took a second on 2026-10-02. Then delete the cluster and the kubeconfig. The last line checks that no NodeBalancer named `hackmidwest-nb` is left:
 
 ```bash
+export KUBECONFIG=$PWD/hackmidwest-kubeconfig.yaml
 kubectl -n hackmidwest delete service agent
 CLUSTER_ID=$(linode-cli lke clusters-list --label hackmidwest-lke --text --no-headers --format id)
 linode-cli lke cluster-delete $CLUSTER_ID
 rm hackmidwest-kubeconfig.yaml
+linode-cli nodebalancers list --label hackmidwest-nb --format id,label
 ```
 
-Deleting the cluster deletes its node Linode. If you deleted the cluster before the Service, the NodeBalancer stays and keeps billing. Delete it by name:
+```
+service "agent" deleted from hackmidwest namespace
+┌────┬───────┐
+│ id │ label │
+├────┼───────┤
+└────┴───────┘
+```
+
+Deleting the cluster deletes its node Linode; on 2026-10-02 it was gone 30 seconds later. If the last table lists `hackmidwest-nb`, the Service was not deleted first, and the NodeBalancer keeps billing. Delete it by name:
 
 ```bash
 NB_ID=$(linode-cli nodebalancers list --label hackmidwest-nb --text --no-headers --format id)
 linode-cli nodebalancers delete $NB_ID
 ```
 
-Then take the node's address off the database's allow list by setting the list again without it, as in step 4. Akamai gives freed addresses to other customers. Left running, this module costs $0.033 an hour: $0.018 for the node and $0.015 for the NodeBalancer. Cloud Manager's **Kubernetes** and **NodeBalancers** pages should no longer list them.
+Then take the node's address off the database's allow list. Akamai gives freed addresses to other customers. Set the three variables again, as in the prerequisites:
 
-`scripts/down.sh` also finds `hackmidwest-lke` and `hackmidwest-nb` and deletes them. While the cluster runs, it also finds the NodeBalancer when you skipped step 6.
+```bash
+MY_IP=$(curl -s https://api.ipify.org)
+DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
+LINODE_IP=$(linode-cli linodes list --label hackmidwest-agent --text --no-headers --format ipv4)
+```
+
+If you kept the Linode from guide 03:
+
+```bash
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$LINODE_IP/32" --format id,label,status
+```
+
+If you deleted it:
+
+```bash
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --format id,label,status
+```
+
+Left running, this module costs $0.033 an hour: $0.018 for the node and $0.015 for the NodeBalancer. Cloud Manager's **Kubernetes** and **NodeBalancers** pages should no longer list them.
+
+`scripts/down.sh` also finds `hackmidwest-lke` and `hackmidwest-nb` and deletes them, and while the cluster runs it finds the NodeBalancer even when you skipped step 6. It deletes everything else the kit made as well, including the database and the bucket, so run it only when you are done with the whole kit.
 
 ## Next steps
 

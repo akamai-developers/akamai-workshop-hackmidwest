@@ -5,7 +5,7 @@
   -----------------                   --------------------------------------------------------
   linode-cli / python  ---creates-->  Linode "hackmidwest-agent" (body)
                                         docker compose
-                                          agent (FastAPI, port 8000)  --tools-->  Object Storage bucket (knowledge)
+                                          agent (FastAPI, port 8000)   --tools-->  Object Storage bucket (knowledge)
                                           valkey (reflexes)            --sql---->  Managed PostgreSQL + pgvector (memory)
                                                                        --https-->  ws.akamai-workshops.com/v1 (brain)
 ```
@@ -65,7 +65,7 @@ The same four status lines print first. They are left out of the outputs below.
 I don't have a specific demo slot saved for your team. The schedule in schedule.md says judging runs Sunday from 1:00 PM to 3:30 PM, and teams demo at their tables in the order shown on the screen. Each team gets three minutes to demo plus two minutes for questions, per rules.md. Check the screen on Sunday for your exact slot.
 ```
 
-Same conversation, new process. `recall` found no note, so the agent fell back to the documents in your bucket. The first process saved the fact in a Python list, and the list ended with the process. The second process started with nothing.
+Your wording will differ. What matters is that `recall` finds nothing, so the agent falls back to the documents in your bucket. Same conversation, new process. The first process saved the fact in a Python list, and the list ended with the process. The second process started with nothing.
 
 ## Step 2: Check that the database is ready
 

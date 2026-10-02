@@ -10,6 +10,11 @@ Phase 6: polish and verification.
 
 - The README's first screen is the credit link, the stack picture, and the three paths. Its introduction moved under "Three ways to use this kit".
 - The header of `scripts/down.sh` says how it finds the cluster's NodeBalancer.
+- After a teachability review, guide 04's clean up works in a new terminal: it sets `KUBECONFIG` before deleting the Service, ends by checking that no `hackmidwest-nb` is left, and gives the allow-list commands. Step 4 waits for the database to be `active` again, and step 7 says how to restart the agent when memory comes up as `error`, because the agent connects once, when it starts.
+- Guide 04 step 3 creates its objects with `--save-config`, so the `kubectl apply` updates in step 8 and in `scripts/deploy_lke.sh` do not warn. It warns that `--from-env-file` keeps quotes in values, which the laptop agent strips. Step 8 shows how to update the Secret, and the overview draws the LKE body.
+- `k8s/service.yaml` gives the cluster's NodeBalancer name as LKE makes it: `lke`, the cluster id, and 12 more characters.
+- Guides 01 and 02 say the model words its answers differently each time. Guide 03's allow-list clean up looks up its own variables.
+- The arrows in the stack picture line up.
 
 ### Verified
 

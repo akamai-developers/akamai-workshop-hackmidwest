@@ -5,7 +5,7 @@
   -----------------                   --------------------------------------------------------
   linode-cli / python  ---creates-->  Linode "hackmidwest-agent" (body)
                                         docker compose
-                                          agent (FastAPI, port 8000)  --tools-->  Object Storage bucket (knowledge)
+                                          agent (FastAPI, port 8000)   --tools-->  Object Storage bucket (knowledge)
                                           valkey (reflexes)            --sql---->  Managed PostgreSQL + pgvector (memory)
                                                                        --https-->  ws.akamai-workshops.com/v1 (brain)
 ```
@@ -179,7 +179,7 @@ reflexes   off       no cache and no rate limit. Set VALKEY_URL to turn them on.
 I don't have parking details in the team documents yet. I'd suggest checking the HackMidwest website or venue page for parking info.
 ```
 
-The `knowledge` line says `live`: the agent found your bucket. It called `search_docs`, got nothing back, and said so. Without documents, the best a model can do is send you somewhere else, and a careless one invents an answer.
+The `knowledge` line says `live`: the agent found your bucket. It called `search_docs`, got nothing back, and said so. Without documents, the best a model can do is send you somewhere else, and a careless one invents an answer. Your answers will be worded differently each time; compare the tool calls and the facts, not the sentences.
 
 ## Step 6: Upload a document and ask again
 

@@ -1,5 +1,5 @@
 # The front door. On LKE, a Service of type LoadBalancer gets a NodeBalancer: the cluster creates
-# one, named ccm- and 12 more characters, and deletes it again when you delete this Service.
+# one, named lke, your cluster's id, and 12 more characters, and deletes it when you delete this Service.
 # Guide 04 renames it to hackmidwest-nb so you can find it in Cloud Manager and scripts/down.sh can too.
 apiVersion: v1
 kind: Service
