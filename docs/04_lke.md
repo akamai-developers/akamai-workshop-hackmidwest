@@ -124,7 +124,7 @@ Request failed: 503
 	Cluster kubeconfig is not yet available. Please try again later.
 ```
 
-`kubectl` then prints several lines about `localhost:8080`, because the file it reads is empty. Wait a minute and run the four lines again. On 2026-10-02 the kubeconfig was ready 2 minutes 17 seconds after the create command, and the node was already `Ready`:
+`kubectl` then prints several lines about `localhost:8080`, because the file it reads is empty. Wait a minute and run the four lines again. If the kubeconfig arrives before the node has joined, `kubectl get nodes` says `No resources found`, and then shows the node as `NotReady` for about 20 seconds. Run `kubectl get nodes` until it says `Ready`. In two tests on 2026-10-02 that took 2 minutes 17 seconds and 2 minutes 34 seconds from the create command:
 
 ```
 NAME                     STATUS   ROLES    AGE   VERSION
@@ -255,7 +255,7 @@ curl -X POST http://$NB_IP/chat -H "Content-Type: application/json" \
 {"reply":"Your demo slot is at 2:15 PM.","tools_used":["recall"]}
 ```
 
-If `curl` says it could not connect, the NodeBalancer is still applying its settings. On 2026-10-02 it answered 45 seconds after the Service appeared; 35 seconds was too soon. Wait and run it again.
+If `curl` says it could not connect, or `Empty reply from server`, the NodeBalancer is still applying its settings. On 2026-10-02 it answered 45 seconds after the Service appeared; 35 seconds was too soon. In a second test, a request 49 seconds after got an empty reply and the next one worked. Wait and run it again.
 
 If `memory` says `error`, the agent started before the allow list change from step 4 reached the database. Restart the agent so it connects again, then run the checks again:
 

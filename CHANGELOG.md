@@ -13,12 +13,14 @@ Checks for students on a Mac, where commands are pasted into zsh and the scripts
 ### Changed
 
 - Guide 04 and `scripts/deploy_lke.sh` pack the code with `tar --no-xattrs`. A Mac's `tar` stores file attributes, such as the quarantine flag on downloaded files, in the archive, and the pod's GNU `tar` printed one warning per attribute at the top of the agent's log.
+- Guide 04 step 2 says what `kubectl get nodes` shows while the node joins the cluster: `No resources found`, then the node as `NotReady` for about 20 seconds. Step 7 adds `Empty reply from server` to the signs that the NodeBalancer is still starting.
 
 ### Verified
 
 - Every one of the 84 bash blocks in the README and the guides, pasted in order into zsh 5.9 (`zsh -f -i`), gives the same commands, arguments, and output as bash 5.2. Commands that reach the network ran against stand-ins that record their arguments. Planted zsh traps (an unquoted `?` or `[ ]`, a variable that bash splits, an end-of-line `#` comment, `==` in `[ ]`) all showed up as differences.
 - The 26 script tests pass with bash 3.2.57, the version macOS ships, and with `bsdtar` as `tar`.
 - An archive made by `bsdtar` from files with attributes unpacks with GNU `tar` 1.35 in `python:3.12-slim`, the pod's image: exit code 0 either way, 32 warnings without `--no-xattrs`, none with it.
+- Guide 04, run live from a clone of commit 59a6ba0 between 04:00 and 04:12 UTC, on a database and bucket made with `scripts/up.sh` and `scripts/status.sh`. Every block worked as written, including step 3 with `--save-config` and `--no-xattrs`, the wait for `active` in step 4, and both update commands in step 8, which applied without warnings. The pod's log had no `tar` lines. The Clean up ran in a new terminal with no variables set: deleting the Service removed the NodeBalancer, the last command printed the empty table the guide shows, and the node Linode was gone 34 seconds after `cluster-delete`. `scripts/down.sh` then deleted the database, the bucket, and its key, with the database still `updating` from the allow-list change.
 - 79 tests pass.
 
 ## [0.6.0] - 2026-10-02
