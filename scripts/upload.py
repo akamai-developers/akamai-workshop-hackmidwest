@@ -28,11 +28,20 @@ def main() -> int:
     bucket = knowledge.Bucket(cfg)
     index = knowledge.Knowledge(bucket, store, knowledge.Embedder(cfg), "live", bucket.where)
     for path in args.files:
+        if not path.is_file():
+            print(f"Skipped {path}: no such file.")
+            continue
         if path.suffix.lower() not in knowledge.TEXT_FILES:
             print(f"Skipped {path}: the agent reads {' and '.join(knowledge.TEXT_FILES)} files.")
             continue
         bucket.upload(path, path.name)
         chunks = index.index(path.name)
+        if path.name in index.unreadable:
+            print(f"Uploaded {path} to {cfg.obj_bucket}/{path.name}, but could not read it "
+                  f"({index.unreadable[path.name]}). The agent tries it again at each search. "
+                  "Fix the cause and upload it again, or take it out of the bucket:")
+            print(f"  linode-cli obj rm {cfg.obj_bucket} {path.name} --cluster us-sea-1")
+            continue
         print(f"Uploaded {path} to {cfg.obj_bucket}/{path.name} and indexed {chunks} chunk(s).")
 
     if store.state == "live":
@@ -41,7 +50,7 @@ def main() -> int:
         print(f"These vectors were not kept. {store.detail}")
     else:
         print("No database, so these vectors were not kept. The running agent indexes new files on its next question.")
-    return 0
+    return 1 if index.unreadable else 0
 
 
 if __name__ == "__main__":

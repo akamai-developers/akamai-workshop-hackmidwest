@@ -1,4 +1,5 @@
 """Knowledge: chunking, batching, the bucket reader, and sync, with boto3 and the embeddings client mocked."""
+import io
 from types import SimpleNamespace as NS
 from unittest import mock
 
@@ -32,7 +33,7 @@ class FakeEmbeddings:
 
 class FakeSource:
     def __init__(self, files):
-        self.files_now = dict(files)  # key -> (version, text)
+        self.files_now = dict(files)  # key -> (version, text, or the error reading it raises)
         self.reads = []
 
     def files(self):
@@ -40,7 +41,10 @@ class FakeSource:
 
     def read(self, key):
         self.reads.append(key)
-        return self.files_now[key][1]
+        text = self.files_now[key][1]
+        if isinstance(text, Exception):
+            raise text
+        return text
 
 
 def make_knowledge(files):
@@ -111,6 +115,57 @@ def test_sync_skips_unchanged_files_reindexes_changed_ones_and_forgets_deleted_o
     assert kn.sync() == 1
     assert kn.memory.document_keys() == {"parking.md"}
     assert "Lot D" in kn.search("parking")[0].text
+
+
+def test_a_file_it_cannot_read_is_skipped_and_the_others_stay_searchable():
+    kn, _, _ = make_knowledge({
+        "broken.pdf": ("v1", ValueError("Stream has ended unexpectedly")),
+        "parking.md": ("v1", "Park in Lot C."),
+    })
+    assert kn.sync() == 1
+    assert kn.unreadable == {"broken.pdf": "Stream has ended unexpectedly"}
+    assert kn.search("Where can I park?")[0].key == "parking.md"
+
+
+def test_a_file_that_breaks_loses_its_old_chunks_until_it_is_fixed():
+    kn, source, _ = make_knowledge({"guide.md": ("v1", "Park in Lot C.")})
+    kn.sync()
+    source.files_now["guide.md"] = ("v2", ValueError("EOF marker not found"))
+    assert kn.sync() == 0
+    assert kn.memory.document_keys() == set()  # no answers from a version that is no longer in the bucket
+    source.files_now["guide.md"] = ("v3", "Park in Lot D.")
+    assert kn.sync() == 1
+    assert kn.unreadable == {}
+    assert "Lot D" in kn.search("parking")[0].text
+
+
+def test_the_knowledge_line_names_the_files_it_could_not_read():
+    s3 = mock.Mock()
+    s3.get_paginator.return_value.paginate.return_value = [
+        {"Contents": [{"Key": "broken.md", "ETag": '"a"'}, {"Key": "parking.md", "ETag": '"b"'}]},
+    ]
+
+    def get_object(Bucket, Key):
+        if Key == "broken.md":
+            raise RuntimeError("An error occurred (AccessDenied) when calling the GetObject operation: Access Denied")
+        return {"Body": io.BytesIO(b"Park in Lot C.")}
+
+    s3.get_object.side_effect = get_object
+    with mock.patch("boto3.client", return_value=s3):
+        kn = knowledge.connect(CFG, LocalMemory(), knowledge.Embedder(CFG, client=FakeEmbeddings()))
+    assert kn.state == "live"
+    assert kn.detail == ("bucket hackmidwest-test at us-sea-1.linodeobjects.com. Could not read broken.md "
+                         "(An error occurred (AccessDenied) when calling the GetObject operation: Access Denied).")
+    assert kn.memory.document_keys() == {"parking.md"}
+
+
+def test_an_error_without_a_message_is_named_by_its_type():
+    s3 = mock.Mock()
+    s3.get_paginator.return_value.paginate.side_effect = TimeoutError()
+    with mock.patch("boto3.client", return_value=s3):
+        kn = knowledge.connect(CFG, LocalMemory(), knowledge.Embedder(CFG, client=FakeEmbeddings()))
+    assert kn.state == "error"
+    assert kn.detail == "bucket hackmidwest-test at us-sea-1.linodeobjects.com failed: TimeoutError"
 
 
 def test_search_with_an_empty_bucket_returns_nothing():

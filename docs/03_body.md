@@ -320,6 +320,8 @@ To delete everything from guides 01 to 03 at once, run `bash scripts/down.sh`.
 
 `scripts/deploy_linode.sh` runs steps 1 to 7 for you when you rebuild: it creates or reuses the firewall and the Linode, waits for cloud-init, updates the allow list, copies the code, and waits for `/health`. These are the same commands you just typed, in one file.
 
+To turn the agent into your project, follow [Make it yours](../agent/README.md#make-it-yours) in `agent/README.md`.
+
 Then try an optional module:
 
 - [Guide 04: Kubernetes with LKE](04_lke.md): the same agent on a cluster behind a NodeBalancer

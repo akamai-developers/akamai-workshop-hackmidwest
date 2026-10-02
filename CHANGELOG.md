@@ -2,6 +2,29 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.7] - 2026-10-02
+
+Turning the sample agent into your own project.
+
+### Added
+
+- `agent/README.md` has a "Make it yours" section for after guide 03: take the three samples out of the bucket with `linode-cli obj rm` and upload your documents, rewrite the two strings that tell the model what the agent is for, drop or add tools, and ship each change to the Linode, then check it on the chat page. The README, guide 01, step 7, and guide 03's Next steps link to it.
+
+### Fixed
+
+- The "Add a tool" example in `agent/README.md` works as pasted. It left out a third edit, a list in `Tools.schemas()`, so the model never saw the new tool: asked "Where does Byte Club sit?", it searched the documents and said it did not know, 3 times out of 3. `Tools.schemas()` now offers every tool in `SCHEMAS`, so the two blocks in the README are enough, and the text says where to paste each one. A new test pastes them into `agent/tools.py` and calls the tool.
+- One file the agent cannot read, such as a broken PDF, no longer stops it from searching all the others. Before, the agent's `knowledge` line said `error` without naming the file, every `search_docs` call failed, and `scripts/upload.py` stopped with a traceback. Now the agent answers from the other files, names the unreadable one and the reason on its `knowledge` line, and tries it again at each search, so installing a missing package fixes it. It also drops the old chunks of a file that stopped being readable. `upload.py` prints the reason, says to fix the cause or take the file out of the bucket with `linode-cli obj rm`, then goes on with the next file and exits with 1.
+- The PDF recipe in `agent/README.md` says to run `pip install -r requirements.txt` again after adding `pypdf`, to replace `Bucket.read()` rather than add a second one, and to ship the change to the Linode. It shows the message for a missing `pypdf` with its fix, and explains copy-protected PDFs, which need the `cryptography` package. `cryptography` has had no ready-made build for Intel Macs since version 49, so the recipe leaves it optional.
+- The agent no longer stops at startup when the bucket fails with an error that has no message.
+- `scripts/upload.py` says `Skipped <path>: no such file.` for a path that does not exist, and goes on with the next file. Before, a mistyped name ended in a traceback.
+
+### Verified
+
+- With a bike shop's documents in place of the samples and the event wording unchanged, the agent skipped the search for 5 of 12 questions. It turned down "Do you fix flat tires, and what does it cost?" 3 times out of 3, for example with "I'm the starter agent for your HackMidwest team, so I can't fix flat tires." With the two strings rewritten as "Make it yours" shows, it searched and answered from the right file 12 times out of 12.
+- The PDF recipe, applied from the README's text, against a local S3 bucket: without the second `pip install`, a copy-protected PDF, and a broken PDF, each file was skipped with its reason while the agent answered from the others. With `pypdf` installed, it answered from a PDF printed by Chrome; with `cryptography` too, from the copy-protected copy.
+- With PostgreSQL memory (local pgvector 0.8.7), a file removed from the bucket lost its rows in the documents table at the agent's next start.
+- The "Make it yours" commands, pasted as written against a real bucket in Seattle: `linode-cli obj rm` printed `parking.md removed from <bucket>` for each sample, and the agent then answered from the team's own files and no longer knew about parking. The bucket and its access key were deleted afterwards.
+
 ## [0.6.6] - 2026-10-02
 
 What a laptop sees when its address is not on the database's allow list, and how to fix it.

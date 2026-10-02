@@ -18,7 +18,7 @@
 
 ## Three ways to use this kit
 
-Each path ends with a small AI agent running on your own Akamai Cloud account. Then you replace its tools and documents with your idea.
+Each path ends with a small AI agent running on your own Akamai Cloud account. Then you replace its tools and documents with your idea, as [Make it yours](agent/README.md#make-it-yours) shows.
 
 | Path | Time | What you do |
 |---|---|---|

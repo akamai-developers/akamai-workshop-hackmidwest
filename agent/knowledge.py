@@ -37,6 +37,12 @@ def chunk(text: str, size: int = CHUNK_WORDS) -> list[str]:
     return chunks
 
 
+def reason(error: Exception) -> str:
+    """The first line of an error message, or the error's type when it has no message."""
+    lines = str(error).strip().splitlines()
+    return lines[0] if lines else type(error).__name__
+
+
 def batches(texts: list[str]):
     """Group texts so no request has more than 16 inputs or about 5,000 words."""
     batch, words = [], 0
@@ -134,6 +140,7 @@ class Knowledge:
         self.source, self.memory, self.embed = source, memory, embed
         self.state, self.detail = state, detail
         self.versions: dict[str, str] = {}  # file -> version this process last indexed or saw
+        self.unreadable: dict[str, str] = {}  # file -> why it could not be read
 
     def sync(self) -> int:
         """Index files that are new or changed, forget files that are gone. Returns chunks written."""
@@ -150,7 +157,13 @@ class Knowledge:
 
     def index(self, key: str) -> int:
         """Read one file, chunk it, embed the chunks, and store them. Returns the chunk count."""
-        chunks = chunk(self.source.read(key))
+        try:
+            chunks = chunk(self.source.read(key))
+        except Exception as error:  # one file it cannot read, such as a broken PDF, must not stop the others
+            self.unreadable[key] = reason(error)
+            self.memory.delete_document(key)  # chunks of an older version no longer match the bucket
+            return 0
+        self.unreadable.pop(key, None)
         vectors = self.embed([f"{key}\n{text}" for text in chunks])  # the file name helps the match
         self.memory.replace_document(key, chunks, vectors)
         return len(chunks)
@@ -173,5 +186,8 @@ def connect(cfg: Config, memory, embed: Embedder) -> Knowledge:
         knowledge.sync()
     except Exception as error:  # a wrong key or a missing bucket should not stop the agent
         knowledge.state = "error"
-        knowledge.detail = f"{source.where} failed: {str(error).splitlines()[0]}"
+        knowledge.detail = f"{source.where} failed: {reason(error)}"
+    if knowledge.unreadable:
+        files = "; ".join(f"{key} ({why})" for key, why in knowledge.unreadable.items())
+        knowledge.detail = f"{knowledge.detail.rstrip('.')}. Could not read {files}."
     return knowledge

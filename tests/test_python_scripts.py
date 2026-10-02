@@ -56,3 +56,34 @@ def test_upload_says_why_the_vectors_were_not_kept(monkeypatch, capsys, tmp_path
     assert "These vectors were not kept. PostgreSQL at db.example.com:15268 failed" in out
     assert memory.ALLOW_LIST_HINT in out
     assert "No database" not in out
+
+
+def test_upload_names_a_file_it_cannot_read_and_keeps_going(monkeypatch, capsys, tmp_path):
+    upload = load("upload")
+    cfg = config.Config(base_url="x", api_key="y", obj_endpoint="https://us-sea-1.linodeobjects.com",
+                        obj_bucket="hackmidwest-test", obj_access_key="a", obj_secret_key="s")
+    bucket = mock.MagicMock(where="bucket hackmidwest-test at us-sea-1.linodeobjects.com")
+
+    def read(key):
+        if key == "broken.md":
+            raise ValueError("EOF marker not found")
+        return "Park in Lot C."
+
+    bucket.read.side_effect = read
+    monkeypatch.setattr(upload.config, "load", lambda: cfg)
+    monkeypatch.setattr(upload.memory, "connect", lambda cfg: memory.LocalMemory())
+    monkeypatch.setattr(upload.knowledge, "Bucket", lambda cfg: bucket)
+    monkeypatch.setattr(upload.knowledge, "Embedder", lambda cfg: lambda texts: [[1.0, 0.0] for _ in texts])
+    broken, parking, missing = tmp_path / "broken.md", tmp_path / "parking.md", tmp_path / "typo.md"
+    broken.write_text("?")
+    parking.write_text("Park in Lot C.")
+    monkeypatch.setattr(sys, "argv", ["upload.py", str(broken), str(missing), str(parking)])
+
+    assert upload.main() == 1
+    out = capsys.readouterr().out
+    assert (f"Uploaded {broken} to hackmidwest-test/broken.md, but could not read it (EOF marker not found). "
+            "The agent tries it again at each search. Fix the cause and upload it again, or take it out of the bucket:\n"
+            "  linode-cli obj rm hackmidwest-test broken.md --cluster us-sea-1\n") in out
+    assert f"Skipped {missing}: no such file." in out
+    assert f"Uploaded {parking} to hackmidwest-test/parking.md and indexed 1 chunk(s)." in out
+    assert [call.args[1] for call in bucket.upload.call_args_list] == ["broken.md", "parking.md"]

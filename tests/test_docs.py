@@ -31,3 +31,20 @@ def test_quoted_code_matches_the_source(block, sources):
         lines |= {line.strip() for line in (ROOT / source).read_text().splitlines()}
     missing = [line for line in block.splitlines() if line.strip() and line.strip() not in lines]
     assert not missing, f"these quoted lines are not in {', '.join(sources)}: {missing}"
+
+
+def test_the_add_a_tool_recipe_works_as_written():
+    """agent/README.md's example, pasted where the README says, gives the model a tool it can call."""
+    section = (ROOT / "agent/README.md").read_text().split("\n## Add a tool\n")[1].split("\n## ")[0]
+    definition, dispatch = re.findall(r"```python\n(.*?)```", section, re.S)
+    source = (ROOT / "agent/tools.py").read_text()
+    end_of_current_time = '    return now.strftime("%A, %B %d, %Y, %I:%M %p %Z")\n'  # "below the current_time() function"
+    current_time_lines = '            if name == "current_time":\n                return current_time(**args)\n'
+    assert end_of_current_time in source and current_time_lines in source
+    source = source.replace(end_of_current_time, f"{end_of_current_time}\n\n{definition}", 1)
+    source = source.replace(current_time_lines, current_time_lines + dispatch, 1)
+    namespace = {}
+    exec(compile(source, "agent/tools.py with the recipe", "exec"), namespace)
+    tools = namespace["Tools"]()
+    assert "find_table" in [schema["function"]["name"] for schema in tools.schemas()]
+    assert tools.run("find_table", '{"team": "Byte Club"}', "s1") == "Table 12"

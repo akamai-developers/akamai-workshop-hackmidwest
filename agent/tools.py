@@ -1,7 +1,7 @@
 """Tools the model can call. Each tool is a plain function that returns a short string.
 
-To add a tool: write the function, add its schema to SCHEMAS, and add one line to
-Tools.run. The model only reads the schema, so make the description specific.
+To add a tool: write the function, add its schema to SCHEMAS, and call the function
+from Tools.run. The model only reads the schema, so make the description specific.
 """
 import json
 from datetime import datetime
@@ -70,12 +70,13 @@ class Tools:
         self.memory = memory
 
     def schemas(self) -> list[dict]:
-        names = ["current_time"]
-        if self.knowledge:
-            names.append("search_docs")
-        if self.knowledge and self.memory:
-            names += ["remember", "recall"]
-        return [{"type": "function", "function": SCHEMAS[name]} for name in names]
+        """Every tool in SCHEMAS, except the ones that need a service this agent was built without."""
+        missing = set()
+        if not self.knowledge:
+            missing |= {"search_docs", "remember", "recall"}
+        if not self.memory:
+            missing |= {"remember", "recall"}
+        return [{"type": "function", "function": schema} for name, schema in SCHEMAS.items() if name not in missing]
 
     def run(self, name: str, arguments: str, session_id: str) -> str:
         """Run one tool call. Errors go back to the model as text, so it can try again."""

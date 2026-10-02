@@ -5,6 +5,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from agent import config
+from agent import tools as tools_module
 from agent.brain import MAX_STEPS, Brain, RateLimited
 from agent.memory import LocalMemory
 from agent.tools import Tools
@@ -140,6 +141,19 @@ def test_tool_errors_go_back_to_the_model_as_text():
     assert "failed" in tools.run("current_time", "{not json", "s1")
     assert "failed" in tools.run("current_time", '{"timezone": "Mars/Base"}', "s1")
     assert "failed" in tools.run("current_time", '{"unexpected": 1}', "s1")
+
+
+def test_the_model_gets_every_tool_whose_services_are_connected(monkeypatch):
+    def names(tools):
+        return [schema["function"]["name"] for schema in tools.schemas()]
+
+    assert names(Tools()) == ["current_time"]
+    assert names(Tools(knowledge=object())) == ["current_time", "search_docs"]
+    assert names(Tools(knowledge=object(), memory=LocalMemory())) == ["current_time", "search_docs", "remember", "recall"]
+    # a tool a student adds to SCHEMAS needs no other change to reach the model
+    monkeypatch.setitem(tools_module.SCHEMAS, "find_table", {"name": "find_table", "description": "Find a team's table.",
+                                                             "parameters": {"type": "object", "properties": {}}})
+    assert names(Tools()) == ["current_time", "find_table"]
 
 
 def test_config_refuses_to_start_without_the_brain(monkeypatch):

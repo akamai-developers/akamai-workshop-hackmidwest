@@ -250,7 +250,13 @@ class Knowledge:
 
     def index(self, key: str) -> int:
         """Read one file, chunk it, embed the chunks, and store them. Returns the chunk count."""
-        chunks = chunk(self.source.read(key))
+        try:
+            chunks = chunk(self.source.read(key))
+        except Exception as error:  # one file it cannot read, such as a broken PDF, must not stop the others
+            self.unreadable[key] = reason(error)
+            self.memory.delete_document(key)  # chunks of an older version no longer match the bucket
+            return 0
+        self.unreadable.pop(key, None)
         vectors = self.embed([f"{key}\n{text}" for text in chunks])  # the file name helps the match
         self.memory.replace_document(key, chunks, vectors)
         return len(chunks)
@@ -260,11 +266,12 @@ class Knowledge:
         return self.memory.search(self.embed.one(query), k)
 ```
 
-`sync()` lists the bucket and compares each file's ETag, which changes when the file does, with what it indexed before. New and changed files get indexed. Deleted files are forgotten. `search()` calls `sync()` first, which is why the running agent picks up files you upload while it runs. `index()` stores the vectors through memory. Until guide 02 that memory is a Python list, so the agent re-indexes everything each time it starts.
+`sync()` lists the bucket and compares each file's ETag, which changes when the file does, with what it indexed before. New and changed files get indexed. Deleted files are forgotten. `search()` calls `sync()` first, which is why the running agent picks up files you upload while it runs. `index()` stores the vectors through memory. Until guide 02 that memory is a Python list, so the agent re-indexes everything each time it starts. When a file cannot be read, `index()` skips it and keeps the reason. The other files stay searchable, and the `knowledge` status line names the file.
 
 To use your own data, change these:
 
-- `TEXT_FILES` at the top of the file lists the extensions the agent reads: `.md` and `.txt`. [agent/README.md](../agent/README.md) shows how to add PDFs.
+- `TEXT_FILES` at the top of the file lists the extensions the agent reads: `.md` and `.txt`. [agent/README.md](../agent/README.md#read-other-file-types) shows how to add PDFs.
+- The `search_docs` description in `agent/tools.py` and the first sentence of `SYSTEM_PROMPT` in `agent/brain.py` describe the sample documents. Rewrite both for yours, or the model may not search them. [Make it yours](../agent/README.md#make-it-yours) has a tested example. Do it after guide 03, which still checks its work with the sample files.
 - `CHUNK_WORDS` sets the chunk size. Smaller chunks give more precise matches and less context per match.
 - `Bucket` reads through boto3, the AWS SDK for Python. Any S3 code you find works against Akamai Object Storage with the endpoint URL from step 4.
 
