@@ -100,9 +100,10 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: session, message }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));  // a server crash answers in plain text
+      const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join("; ") : data.detail;
       if (response.ok) add("agent", data.reply, data.tools_used);
-      else add("note", "Error " + response.status + ": " + (data.detail || JSON.stringify(data)));
+      else add("note", "Error " + response.status + ": " + (detail || response.statusText));
     } catch (err) {
       add("note", "Could not reach the agent: " + err);
     }

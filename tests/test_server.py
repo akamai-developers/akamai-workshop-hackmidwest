@@ -5,6 +5,7 @@ from unittest import mock
 import httpx
 import openai
 import pytest
+import redis
 from fastapi.testclient import TestClient
 
 from agent import cache, config, server
@@ -125,6 +126,23 @@ def test_valkey_caches_vectors_for_a_day():
     valkey.set_vector("m", "where to park", [0.5, 0.25])
     assert valkey.get_vector("m", "where to park") == [0.5, 0.25]
     assert cache.VECTOR_TTL in fake.expiries.values()
+
+
+class StoppedRedis(FakeRedis):
+    """Answered at startup, then the container stopped."""
+
+    def incr(self, *args, **kwargs):
+        raise redis.ConnectionError("Error 111 connecting to valkey:6379. Connection refused.")
+
+    get = set = expire = incr
+
+
+def test_valkey_that_stops_answering_allows_messages_and_misses_the_cache():
+    with mock.patch("redis.Redis.from_url", return_value=StoppedRedis()):
+        valkey = cache.Valkey("redis://valkey:6379/0")
+    assert all(valkey.allow("web-1") for _ in range(cache.RATE_LIMIT + 1))
+    assert valkey.get_vector("m", "where to park") is None
+    valkey.set_vector("m", "where to park", [0.5, 0.25])  # no exception
 
 
 def test_without_valkey_everything_is_allowed_and_nothing_cached():

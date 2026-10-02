@@ -28,7 +28,7 @@ agent/
 
 **`memory.py`** stores three things: each session's messages, the document chunks with their vectors, and the notes the `remember` tool saves. `PostgresMemory` keeps them in Managed PostgreSQL, where the `vector` column from pgvector and its `<=>` cosine distance operator do the search in SQL. Notes are rows in the documents table whose key starts with `notes/`, so `recall` is the same search with a different filter. Without `DATABASE_URL`, `LocalMemory` keeps the same things in Python lists until the process exits. It connects over IPv4, because the allow list holds IPv4 addresses: on a network with IPv6, a connection would try IPv6 first, be dropped, and wait out the 10-second timeout before it tried IPv4. If the database is set but unreachable, the agent says why and uses the fallback instead of crashing. The brain sends the last 20 messages back to the model each turn, so long chats fit the 32,768-token context window.
 
-**`cache.py`** is the reflexes. With `VALKEY_URL` set, it caches the vector for each question text for a day and allows each session 20 messages a minute. Without it, both are off and nothing else changes.
+**`cache.py`** is the reflexes. With `VALKEY_URL` set, it caches the vector for each question text for a day and allows each session 20 messages a minute. Without it, both are off and nothing else changes. If Valkey stops answering while the agent runs, the agent keeps going without them.
 
 **`server.py`** is the web front. It builds the brain once at startup, then serves the chat page at `/`, `POST /chat` with `{"session_id": "...", "message": "..."}`, and `GET /health`, which lists every role and its state. A rate-limited session gets HTTP 429, and a failed model call gets 502.
 

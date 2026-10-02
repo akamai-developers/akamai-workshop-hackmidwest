@@ -2,6 +2,22 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.2] - 2026-10-02
+
+Fixes from a fresh review of the agent code.
+
+### Fixed
+
+- The agent keeps answering when Valkey stops while it runs, for example after `docker compose stop valkey` or when the Valkey pod restarts on LKE. Before, every message raised `redis.exceptions.ConnectionError`: `POST /chat` returned a plain-text HTTP 500, and the terminal chat exited with a traceback. Now `get_vector()` counts as a cache miss, `set_vector()` does nothing, and `allow()` lets the message through, the same as running without `VALKEY_URL`. Guide 05 step 4 quotes the new code.
+- The chat page shows `Error 500: Internal Server Error` when the server crashes, instead of "Could not reach the agent" and a JSON parse error. A message over 4,000 characters shows `Error 422: String should have at most 4000 characters` instead of `[object Object]`.
+
+### Verified
+
+- With Valkey stopped, the agent's Docker image answered `POST /chat` with HTTP 200, and "Where can I park?" still called `search_docs` and quoted `parking.md` in 4.4 seconds. Before the fix, `Brain.chat()` raised `ConnectionError` at once after a local Valkey container stopped. `tests/test_server.py` has a test that fails on the old code.
+- The chat page, opened in a browser through Playwright against the real FastAPI app with a fake brain, showed the reply, the 500, and the 422 messages above.
+- `recall` finds notes when the documents table is large. With 3 notes and 30 to 30,000 document chunks in PostgreSQL 17.11 with pgvector 0.8.7, the planner scanned the table for notes every time and returned all 3. The `search_docs` query used the HNSW index and returned 3 chunks every time, because its filter removes only the few notes.
+- 80 tests pass.
+
 ## [0.6.1] - 2026-10-02
 
 Checks for students on a Mac, where commands are pasted into zsh and the scripts run with bash 3.2 and BSD tools.
