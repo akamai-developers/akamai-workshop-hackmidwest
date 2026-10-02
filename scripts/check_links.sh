@@ -8,7 +8,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 BOT_PROTECTED='^https?://(www\.)?(akamai|linode)\.com/'
-# This repository answers 404 until it is public. Students need it public to clone it.
+# This repository answers 404 while it is private. Students need it public to clone it.
 THIS_REPO='github\.com/akamai-developers/akamai-workshop-hackmidwest'
 # Placeholders and API endpoints that are not pages: <ip>, localhost, example hosts, the inference API.
 NOT_A_PAGE='[<>{}$]|localhost|127\.0\.0\.1|example\.(com|org)|ws\.akamai-workshops\.com|api\.linode\.com'

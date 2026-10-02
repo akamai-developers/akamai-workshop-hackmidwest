@@ -2,34 +2,40 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.5.0] - 2026-10-02
 
-Phase 5, in progress: the optional LKE module. Not yet run on a live cluster.
+Phase 5: the optional LKE module, run live, and a full rehearsal of every guide on Akamai Cloud.
 
 ### Added
 
-- `k8s/agent.yaml`, `k8s/valkey.yaml`, and `k8s/service.yaml`. The agent runs on the public `python:3.12-slim` image and unpacks its code from a ConfigMap, so no image registry is needed. The Service uses a NodeBalancer created as `hackmidwest-nb` through the `linode-loadbalancer-nodebalancer-id` annotation, so it carries the kit's label.
-- `scripts/deploy_lke.sh`: a one-node LKE cluster, the kubeconfig, the NodeBalancer, the Secret from `.env`, the code ConfigMap, the database allow list, and a wait for `/health` through the NodeBalancer.
-- `docs/04_lke.md`, with each step that needs a live cluster marked unverified.
-- `scripts/down.sh` also deletes `hackmidwest-nb` and the local kubeconfig.
-- `tests/test_scripts.py`: every script parses, and the `.env` helpers in `scripts/lib.sh` run for real, including reading a missing key under `set -e`, the bug that stopped `scripts/up.sh` in the first live run.
+- `k8s/agent.yaml`, `k8s/valkey.yaml`, and `k8s/service.yaml`. The agent runs on the public `python:3.12-slim` image and unpacks its code from a ConfigMap, so no image registry is needed. The Service of type LoadBalancer makes the cluster create a NodeBalancer.
+- `scripts/deploy_lke.sh`: a one-node LKE cluster, the kubeconfig, the Secret from `.env`, the code ConfigMap, the database allow list, the manifests, and a wait for `/health` through the NodeBalancer, which it renames `hackmidwest-nb`.
+- `docs/04_lke.md`, with outputs from a live cluster.
+- `tests/test_scripts.py`: every script parses, the `.env` helpers in `scripts/lib.sh` run for real, and `scripts/down.sh` succeeds when everything is already gone.
+- `tests/test_docs.py`: every line of code a guide quotes must still exist in the file it quotes.
 
 ### Changed
 
-After a teachability review of the guides:
+From the rehearsal, which pasted every block of guides 00 to 05 into a terminal against a fresh clone:
 
+- The LKE cluster now creates its own NodeBalancer, and guide 04 step 6 renames it `hackmidwest-nb`. The first design made the NodeBalancer by hand and handed it to the Service with the `linode-loadbalancer-nodebalancer-id` annotation, but the cluster's controller runs as a restricted LKE service account that cannot see NodeBalancers you make, so the Service failed with `[403] Unauthorized`. Guide 04's clean up deletes the Service first, which makes the cluster delete the NodeBalancer.
+- The agent and `scripts/db_init.py` connect to PostgreSQL over IPv4. On a network with IPv6, each connection tried IPv6 first, was dropped by the IPv4 allow list, and waited out the 10-second connect timeout. An agent start went from 13 seconds to under 3.
+- `scripts/down.sh` recognizes "No bucket named" from `linode-cli obj ls`. Before, a second run, or a run after the guides' clean up, stopped with "run this script again" every time. It also finds the cluster's NodeBalancer through the agent Service when step 6 was skipped.
+- `scripts/db_init.py` says to wait for DNS when a new database's host name does not resolve yet, instead of pointing at the allow list.
+- The guides show what the CLI really prints: the `Using default values: {}` line before create commands, the obj plugin's daily key clean-up notice, narrow `--format` columns that fit an 80-column terminal, SSH timing out before a new Linode boots, Docker's long build log, the 503 before a cluster's kubeconfig is ready, and the NodeBalancer's 45-second warm-up.
 - No comments inside command blocks. On macOS, zsh does not treat `#` as a comment at the prompt, so a pasted inline comment broke `linode-cli obj rb` and the README quick start.
 - Ids come from lookups by label, such as `linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id`, so commands work in a new terminal and nobody pastes an example id. No `<placeholder>` remains inside a command.
 - The pre-work gets the agent answering at step 3, and covers Python 3.9 on macOS and the missing `python3-venv` on Ubuntu and WSL.
-- Guide 02 shows forgetting with the same session in a new process, so the process is the only thing that changes.
-- Guide 03 drops the restart step, which repeated guide 02's lesson, and adds the agent's log command and the allow-list clean-up. Guide 04 adds `--timeout=600s` to the rollout and `COPYFILE_DISABLE=1` to the tarball for macOS. Guide 05 sends the 21 requests in parallel, so they land in one minute: 20 answered, 1 refused, tested on 2026-10-02.
-- The README gains "What this kit is not" and moves the scripts below the guides. `agent/README.md` gains PDF support and the first changes to make before real data.
+- Guide 02 shows forgetting with the same session in a new process, so the process is the only thing that changes. Guide 03 drops the restart step, which repeated guide 02's lesson, and adds the agent's log command and the allow-list clean-up.
+- The README gains "What this kit is not", the measured times, and moves the scripts below the guides. `agent/README.md` gains PDF support and the first changes to make before real data.
 - `scripts/check_links.sh` also checks that every `#anchor` matches a heading.
 
-### Verified
+### Verified on Akamai Cloud
 
-- The manifests pass `kubeconform -strict` against the Kubernetes 1.33 schemas.
-- The pod's startup command, run in Docker with the code tarball mounted at `/code`, answered `/health` 12 seconds after start. The tarball is 18.5 KB.
+- The full guided path, from `git clone` to the agent answering on its Linode, took about 15 minutes of commands and waiting. The database was active 4 minutes 44 seconds after it was created and in DNS at 7 minutes 29 seconds.
+- LKE 1.36: the kubeconfig was ready 2 minutes 17 seconds after the create command, with the node already Ready. The agent pod was ready 27 seconds after `kubectl apply`, and the NodeBalancer answered 45 seconds after it. All four roles were live through the NodeBalancer.
+- The 30-minute path's three scripts took 3 minutes 40 seconds, with memory on its fallback as designed.
+- The guides' clean up commands and `scripts/down.sh` removed everything; exact-label and id lookups found nothing left.
 
 ## [0.4.0] - 2026-10-02
 

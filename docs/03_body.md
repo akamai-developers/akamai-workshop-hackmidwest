@@ -18,7 +18,7 @@ So far the agent runs in your terminal and stops when your laptop sleeps. In thi
 
 Four pieces make that work. A Cloud Firewall lets in SSH and the agent's port and drops everything else. cloud-init, a standard first-boot tool that reads instructions from the Linode's Metadata service, installs Docker. Your code and `.env` travel over SSH, because user data is readable from inside the Linode and is no place for secrets. Docker Compose builds the agent and starts it next to Valkey.
 
-`scripts/deploy_linode.sh`, which runs the same commands, took 3 minutes 9 seconds from start to a working `/health` on 2026-10-02.
+`scripts/deploy_linode.sh`, which runs the same commands, took 3 minutes 9 seconds and 3 minutes 26 seconds from start to a working `/health` in two runs on 2026-10-02.
 
 ## Learning objectives
 
@@ -116,6 +116,7 @@ linode-cli linodes create \
 The fields that matter: `g6-standard-1` has 1 CPU and 2 GB of memory for $0.018 an hour, enough to build and run the containers. `--root_pass` gets a random password you never use, because you log in with the key from `--authorized_keys`. `--firewall_id` puts the Linode behind the firewall from step 1 from its first second. `--metadata.user_data` must be base64; the `tr` removes line breaks so the command works the same on macOS and Linux.
 
 ```
+Using default values: {}; use the --no-defaults flag to disable defaults
 ┌───────────┬───────────────────┬──────────────┬──────────────┐
 │ id        │ label             │ status       │ ipv4         │
 ├───────────┼───────────────────┼──────────────┼──────────────┤
@@ -134,34 +135,42 @@ In Cloud Manager, open **Linodes**: `hackmidwest-agent` goes from Provisioning t
 
 ## Step 4: Wait for cloud-init
 
-Log in and wait for cloud-init to finish. The first time you connect, SSH asks whether to trust the Linode's host key; type `yes`.
+Wait until Cloud Manager shows `hackmidwest-agent` as Running. Then log in and wait for cloud-init to finish. The first time you connect, SSH asks whether to trust the Linode's host key; type `yes`.
 
 ```bash
 ssh root@$LINODE_IP cloud-init status --wait
 ```
 
 ```
+Warning: Permanently added '198.51.100.7' (ED25519) to the list of known hosts.
 .................................................status: done
 ```
 
-If SSH says "Connection refused", the Linode is still booting. Try again in 20 seconds. On 2026-10-02, SSH answered 1 minute 39 seconds after the create command and cloud-init finished about 40 seconds later.
+If SSH says "Connection refused" or "Connection timed out", the Linode is still booting. Run the command again. In two tests on 2026-10-02, SSH answered about 2 minutes after the create command, and cloud-init finished about a minute after that. A connection tried too early can wait 2 minutes before it times out.
 
 ## Step 5: Let the Linode into the database
 
 The database still accepts only your laptop. The update below replaces the whole allow list, so it names both addresses.
 
 ```bash
-linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$LINODE_IP/32"
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$LINODE_IP/32" --format id,label,status
 linode-cli databases postgresql-view $DB_ID --format allow_list
 ```
 
 ```
+┌────────┬────────────────┬──────────┐
+│ id     │ label          │ status   │
+├────────┼────────────────┼──────────┤
+│ 533120 │ hackmidwest-db │ updating │
+└────────┴────────────────┴──────────┘
 ┌──────────────────────────────────┐
 │ allow_list                       │
 ├──────────────────────────────────┤
-│ 198.51.100.7/32 203.0.113.25/32  │
+│ 203.0.113.25/32, 198.51.100.7/32 │
 └──────────────────────────────────┘
 ```
+
+The database says `updating` while the change rolls out. On 2026-10-02 that took under a minute.
 
 Skip this step if you have no database.
 
@@ -179,12 +188,19 @@ Then build the agent's image and start both containers:
 ssh root@$LINODE_IP "cd /opt/hackmidwest && docker compose up -d --build"
 ```
 
+Docker prints about 250 lines while it downloads Valkey and builds the agent. That took 55 seconds on 2026-10-02. The last lines are:
+
 ```
  agent  Built
+ Network hackmidwest_default  Creating
  Network hackmidwest_default  Created
+ Container hackmidwest-valkey-1  Creating
  Container hackmidwest-valkey-1  Created
+ Container hackmidwest-agent-1  Creating
  Container hackmidwest-agent-1  Created
+ Container hackmidwest-valkey-1  Starting
  Container hackmidwest-valkey-1  Started
+ Container hackmidwest-agent-1  Starting
  Container hackmidwest-agent-1  Started
 ```
 
@@ -291,7 +307,7 @@ linode-cli firewalls delete $FW_ID
 If you keep the database, take the Linode's address off its allow list. Akamai gives freed addresses to other customers. This leaves only your laptop:
 
 ```bash
-linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32"
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --format id,label,status
 ```
 
 Cloud Manager's **Linodes** and **Firewalls** pages should no longer list them. Left running, the Linode costs $0.018 an hour, up to $12 a month, even when it is powered off. The firewall is free.

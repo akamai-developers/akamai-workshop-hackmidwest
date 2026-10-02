@@ -16,7 +16,7 @@ Akamai bills each resource by the hour, up to a monthly cap. In the words of the
 | Valkey | Guide 03 | A container on the Linode | free | free | |
 | LKE cluster `hackmidwest-lke`, control plane | Guide 04 (optional) | Standard (`lke-sa`) | $0.00 | $0 | `linode-cli lke types` |
 | LKE worker node | Guide 04 (optional) | `g6-standard-1` | $0.018 | $12 | `linode-cli linodes types` |
-| NodeBalancer for the LoadBalancer Service | Guide 04 (optional) | Basic | $0.015 | $10 | `linode-cli nodebalancers types` |
+| NodeBalancer `hackmidwest-nb`, made by the cluster | Guide 04 (optional) | `common` | $0.015 | $10 | `linode-cli nodebalancers types` |
 
 The Linode includes 2 TB of outbound transfer a month and Object Storage includes 1 TB, both shown as `transfer` in the commands above. Object Storage beyond the flat fee costs $0.02 per GB (`objectstorage-overage`). The kit stores a few kilobytes.
 

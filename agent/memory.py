@@ -8,10 +8,12 @@ things in Python lists until the process exits.
 Notes saved with the remember tool are rows in the documents table whose key starts
 with notes/, so recall is the same vector search as search_docs with another filter.
 """
+import socket
 import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import numpy as np
 
@@ -30,6 +32,18 @@ class Hit:
 def note_key() -> str:
     """A unique key for one note, sortable by time."""
     return f"notes/{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:6]}"
+
+
+def ipv4_of(url: str) -> str | None:
+    """The database's IPv4 address. The allow list holds IPv4 addresses, and on a network with IPv6
+    a connection tries IPv6 first, gets dropped, and waits out connect_timeout before it tries IPv4."""
+    host = urlparse(url).hostname
+    if not host:
+        return None
+    try:
+        return socket.getaddrinfo(host, None, socket.AF_INET)[0][4][0]
+    except socket.gaierror:
+        return None  # psycopg looks the name up itself and reports the error
 
 
 class LocalMemory:
@@ -92,8 +106,8 @@ class PostgresMemory:
 
         # Keepalives notice a connection that Wi-Fi or a NAT dropped while idle, so a query fails fast
         # and _run() reconnects, instead of hanging for minutes.
-        self.conn = psycopg.connect(self.url, autocommit=True, connect_timeout=10, keepalives=1,
-                                    keepalives_idle=30, keepalives_interval=10, keepalives_count=3)
+        self.conn = psycopg.connect(self.url, hostaddr=ipv4_of(self.url), autocommit=True, connect_timeout=10,
+                                    keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3)
         register_vector(self.conn)  # fails here if pgvector is not enabled yet
 
     def _run(self, sql: str, params=None) -> list[tuple]:

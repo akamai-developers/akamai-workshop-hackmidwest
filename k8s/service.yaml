@@ -1,13 +1,11 @@
-# The front door. On LKE, a Service of type LoadBalancer is served by a NodeBalancer.
-# The annotation hands it the NodeBalancer you created, hackmidwest-nb, instead of letting the
-# cluster make one with a generated name. Replace NODEBALANCER_ID with its id; guide 04 uses sed.
+# The front door. On LKE, a Service of type LoadBalancer gets a NodeBalancer: the cluster creates
+# one, named ccm- and 12 more characters, and deletes it again when you delete this Service.
+# Guide 04 renames it to hackmidwest-nb so you can find it in Cloud Manager and scripts/down.sh can too.
 apiVersion: v1
 kind: Service
 metadata:
   name: agent
   namespace: hackmidwest
-  annotations:
-    service.beta.kubernetes.io/linode-loadbalancer-nodebalancer-id: "NODEBALANCER_ID"
 spec:
   type: LoadBalancer
   selector:

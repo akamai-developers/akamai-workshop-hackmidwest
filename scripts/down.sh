@@ -13,6 +13,17 @@ lookup() { linode-cli "$1" "$2" --label "$3" --text --no-headers --format id 2>/
 
 lke_id=$(lookup lke clusters-list "$LKE_LABEL")
 nb_id=$(lookup nodebalancers list "$NB_LABEL")
+nb_name=$NB_LABEL
+# Guide 04 renames the NodeBalancer the cluster made to hackmidwest-nb. If that step was skipped,
+# find it by the address of the agent Service. This needs kubectl and the cluster still running.
+if [[ -z $nb_id && -n $lke_id && -f $KUBECONFIG_FILE ]] && command -v kubectl >/dev/null; then
+  nb_ip=$(KUBECONFIG=$KUBECONFIG_FILE kubectl -n hackmidwest get service agent \
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+  if [[ -n $nb_ip ]]; then
+    nb_id=$(linode-cli nodebalancers list --ipv4 "$nb_ip" --text --no-headers --format id 2>/dev/null)
+    nb_name=$(linode-cli nodebalancers view "$nb_id" --text --no-headers --format label 2>/dev/null)
+  fi
+fi
 linode_id=$(lookup linodes list "$LINODE_LABEL")
 fw_id=$(lookup firewalls list "$FIREWALL_LABEL")
 database_id=$(db_id)
@@ -22,7 +33,7 @@ bucket=$(get_env OBJ_BUCKET)
 [[ $bucket == hackmidwest-* ]] || bucket=$(bucket_name)
 if out=$(linode-cli obj ls "$bucket" --cluster "$CLUSTER" 2>&1); then
   bucket_state=found
-elif [[ $out == *NoSuchBucket* || $out == *"does not exist"* || $out == *"not found"* ]]; then
+elif [[ $out == *"No bucket named"* || $out == *NoSuchBucket* ]]; then  # gone already
   bucket_state=none
 else
   bucket_state=unknown
@@ -39,7 +50,7 @@ echo "Resources from this kit in your account:"
 found=0
 show() { printf "  %-16s %-26s %s\n" "$1" "$2" "$3"; found=$((found + 1)); }
 [[ -n $lke_id ]] && show "LKE cluster" "$LKE_LABEL (id $lke_id)" "\$0.018 an hour per node"
-[[ -n $nb_id ]] && show "NodeBalancer" "$NB_LABEL (id $nb_id)" "\$0.015 an hour"
+[[ -n $nb_id ]] && show "NodeBalancer" "$nb_name (id $nb_id)" "\$0.015 an hour"
 [[ -n $linode_id ]] && show "Linode" "$LINODE_LABEL (id $linode_id)" "\$0.018 an hour"
 [[ -n $fw_id ]] && show "Cloud Firewall" "$FIREWALL_LABEL (id $fw_id)" "free"
 [[ -n $database_id ]] && show "PostgreSQL" "$DB_LABEL (id $database_id)" "\$0.024 an hour"
@@ -56,7 +67,7 @@ else
   failed=0
   run() { echo "  $1"; shift; "$@" >/dev/null || { echo "    FAILED: $*"; failed=$((failed + 1)); }; }
   [[ -n $lke_id ]] && run "Deleting LKE cluster $LKE_LABEL" linode-cli lke cluster-delete "$lke_id"
-  [[ -n $nb_id ]] && run "Deleting NodeBalancer $NB_LABEL" linode-cli nodebalancers delete "$nb_id"
+  [[ -n $nb_id ]] && run "Deleting NodeBalancer $nb_name" linode-cli nodebalancers delete "$nb_id"
   [[ -n $linode_id ]] && run "Deleting Linode $LINODE_LABEL" linode-cli linodes delete "$linode_id"
   [[ -n $fw_id ]] && run "Deleting firewall $FIREWALL_LABEL" linode-cli firewalls delete "$fw_id"
   [[ -n $database_id ]] && run "Deleting database $DB_LABEL" linode-cli databases postgresql-delete "$database_id"

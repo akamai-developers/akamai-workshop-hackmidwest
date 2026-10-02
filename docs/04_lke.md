@@ -12,23 +12,22 @@
 
 This module swaps the **body**: instead of one Linode running Docker Compose, the agent and Valkey run on a Linode Kubernetes Engine (LKE) cluster behind a NodeBalancer. The brain, knowledge, and memory stay the same.
 
-> [!WARNING]
-> Steps marked `[Unverified: not yet run on a live LKE cluster]` have not been tested end to end yet. The manifests pass Kubernetes schema validation, and the pod's startup command was tested in Docker on 2026-10-02. If a step fails, tell the organizers what you saw.
-
 ## Overview
 
 Kubernetes runs containers for you on a group of machines, restarts them when they fail, and puts a stable address in front of them. LKE is Akamai's managed Kubernetes: Akamai runs the control plane for free on the standard tier, and you pay for the worker nodes, which are ordinary Linodes.
 
-Kubernetes normally pulls your code as a container image from a registry. This module skips the registry so it fits in 15 minutes: the pod starts from the public `python:3.12-slim` image, unpacks your code from a ConfigMap, and installs the agent's packages on start. Your `.env` becomes a Secret. A NodeBalancer, Akamai's load balancer, gives the agent a public address. For the production pattern, with an image in a registry and two replicas, see module 8 of the [solution architect agent workshop](https://github.com/akamai-developers/akamai-workshop-solution-architect-agent/tree/main/workshop/08_deploy_to_lke).
+Kubernetes normally pulls your code as a container image from a registry. This module skips the registry so it fits in 15 minutes: the pod starts from the public `python:3.12-slim` image, unpacks your code from a ConfigMap, and installs the agent's packages on start. Your `.env` becomes a Secret. A NodeBalancer, Akamai's load balancer, gives the agent a public address. The cluster creates it for you when you ask for a Service of type LoadBalancer. For the production pattern, with an image in a registry and two replicas, see module 8 of the [solution architect agent workshop](https://github.com/akamai-developers/akamai-workshop-solution-architect-agent/tree/main/workshop/08_deploy_to_lke).
+
+Tested on 2026-10-02: the cluster had a Ready node 2 and a half minutes after the create command, and the agent answered through its NodeBalancer 45 seconds after `kubectl apply`.
 
 ## Learning objectives
 
 By the end of this module you will be able to:
 
 - Create an LKE cluster and connect `kubectl` to it
-- Create a NodeBalancer and hand it to a Kubernetes Service
 - Turn `.env` into a Secret and your code into a ConfigMap
 - Deploy the agent and Valkey with `kubectl apply`
+- Explain how a Service of type LoadBalancer becomes a NodeBalancer, and give it a name you can find
 - Check the agent through the NodeBalancer
 - Tear the cluster down so it stops billing
 
@@ -36,7 +35,7 @@ By the end of this module you will be able to:
 
 - [Guide 01](01_knowledge.md) and [guide 02](02_memory.md) done, so `.env` has your bucket and database. The Linode from [guide 03](03_body.md) can stay or go.
 - `kubectl` installed: see [Install the Kubernetes tools](https://kubernetes.io/docs/tasks/tools/). Check with `kubectl version --client`. Use a version within one minor version of the cluster's.
-- About 15 minutes, plus 5 to 10 minutes for the cluster to start
+- About 15 minutes
 
 Set three shell variables first, in the terminal you will use: your laptop's address, your database's id, and the address of the Linode from guide 03. `LINODE_IP` comes back empty if you deleted that Linode.
 
@@ -55,7 +54,17 @@ See which Kubernetes versions LKE offers. The newest is first:
 linode-cli lke versions-list
 ```
 
-On 2026-10-02 the list was 1.36 and 1.35. Create a cluster with one worker node:
+```
+┌──────┐
+│ id   │
+├──────┤
+│ 1.36 │
+├──────┤
+│ 1.35 │
+└──────┘
+```
+
+That was the list on 2026-10-02. Create a cluster with one worker node on the newest version:
 
 ```bash
 linode-cli lke cluster-create \
@@ -69,7 +78,16 @@ linode-cli lke cluster-create \
 
 `--node_pools.type` is the plan of each worker node, the same `g6-standard-1` as the Linode in guide 03. `--node_pools.count 1` keeps the cost to one node, $0.018 an hour. The control plane on the standard tier is free.
 
-`[Unverified: not yet run on a live LKE cluster]` The output is a table with the cluster's id, label, region, and version. In Cloud Manager, open **Kubernetes**: `hackmidwest-lke` is listed in Seattle. Keep the id in a variable:
+```
+Using default values: {}; use the --no-defaults flag to disable defaults
+┌────────┬─────────────────┬────────┬─────────────┐
+│ id     │ label           │ region │ k8s_version │
+├────────┼─────────────────┼────────┼─────────────┤
+│ 662761 │ hackmidwest-lke │ us-sea │ 1.36        │
+└────────┴─────────────────┴────────┴─────────────┘
+```
+
+In Cloud Manager, open **Kubernetes**: `hackmidwest-lke` is listed in Seattle. Keep the id in a variable:
 
 ```bash
 CLUSTER_ID=$(linode-cli lke clusters-list --label hackmidwest-lke --text --no-headers --format id)
@@ -86,27 +104,23 @@ export KUBECONFIG=$PWD/hackmidwest-kubeconfig.yaml
 kubectl get nodes
 ```
 
-`[Unverified: not yet run on a live LKE cluster]` If `kubeconfig-view` returns an error, the cluster is still starting; wait a minute and try again. `kubectl get nodes` lists one node, and its STATUS turns `Ready` after a few minutes. On older macOS, use `base64 -D` instead of `base64 --decode`.
+Right after you create the cluster, this fails:
 
-## Step 3: Create the NodeBalancer
-
-A Kubernetes Service of type LoadBalancer gets its public address from a NodeBalancer. If you let the cluster create one, it gets a generated name. Create it yourself instead, so it carries your `hackmidwest-` label and `scripts/down.sh` can find it:
-
-```bash
-linode-cli nodebalancers create --label hackmidwest-nb --region us-sea --format id,label,ipv4
+```
+Request failed: 503
+	Cluster kubeconfig is not yet available. Please try again later.
 ```
 
-`[Unverified: not yet run on a live LKE cluster]` The output shows the NodeBalancer's id and its public IPv4 address. Keep both in variables:
+`kubectl` then prints several lines about `localhost:8080`, because the file it reads is empty. Wait a minute and run the four lines again. On 2026-10-02 the kubeconfig was ready 2 minutes 17 seconds after the create command, and the node was already `Ready`:
 
-```bash
-NB_ID=$(linode-cli nodebalancers list --label hackmidwest-nb --text --no-headers --format id)
-NB_IP=$(linode-cli nodebalancers list --label hackmidwest-nb --text --no-headers --format ipv4)
-echo $NB_ID $NB_IP
+```
+NAME                     STATUS   ROLES    AGE   VERSION
+lke662761-981465-w54sh   Ready    <none>   12s   v1.36.3
 ```
 
-A NodeBalancer costs $0.015 an hour. In Cloud Manager it appears under **NodeBalancers**.
+The node is a Linode that the cluster made and manages. It shows in Cloud Manager under **Linodes** with a name that starts with `lke` and your cluster's id.
 
-## Step 4: Load your settings and code into the cluster
+## Step 3: Load your settings and code into the cluster
 
 Everything goes in a namespace, `hackmidwest`, so `kubectl get` shows only this module's objects. Your `.env` becomes a Secret, and a tarball of your code becomes a ConfigMap:
 
@@ -118,11 +132,17 @@ kubectl -n hackmidwest create configmap agent-code --from-file=agent.tgz
 rm agent.tgz
 ```
 
-`--from-env-file` reads `.env` line by line and skips the comments. `COPYFILE_DISABLE=1` stops macOS from adding hidden `._` files to the tarball; on Linux it does nothing. The tarball of `agent/` and `docs/sample/` was 18.5 KB on 2026-10-02; a ConfigMap holds up to 1 MiB.
+```
+namespace/hackmidwest created
+secret/agent-env created
+configmap/agent-code created
+```
 
-## Step 5: Let the node into the database
+`--from-env-file` reads `.env` line by line and skips the comments. `COPYFILE_DISABLE=1` stops macOS from adding hidden `._` files to the tarball; on Linux it does nothing. The tarball of `agent/` and `docs/sample/` was 19 KB on 2026-10-02; a ConfigMap holds up to 1 MiB.
 
-The agent's pod reaches the database from the worker node's public address. Read it from Kubernetes; `grep -v ':'` drops an IPv6 address if the node has one:
+## Step 4: Let the node into the database
+
+The agent's pod reaches the database from the worker node's public address. Read it from Kubernetes; `grep -v ':'` drops the node's IPv6 address:
 
 ```bash
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}' | tr ' ' '\n' | grep -v ':' | head -n 1)
@@ -132,31 +152,78 @@ echo $NODE_IP
 `kubectl get nodes -o wide` shows the same address in its EXTERNAL-IP column. Then add it to the allow list. The update replaces the whole list, so name every address that should keep access. If you kept the Linode from guide 03:
 
 ```bash
-linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$LINODE_IP/32" --allow_list "$NODE_IP/32"
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$LINODE_IP/32" --allow_list "$NODE_IP/32" --format id,label,status
 ```
 
 If you deleted it:
 
 ```bash
-linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$NODE_IP/32"
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$NODE_IP/32" --format id,label,status
 ```
 
-## Step 6: Deploy
+```
+┌────────┬────────────────┬──────────┐
+│ id     │ label          │ status   │
+├────────┼────────────────┼──────────┤
+│ 533120 │ hackmidwest-db │ updating │
+└────────┴────────────────┴──────────┘
+```
 
-Read the three manifests in `k8s/` first: `valkey.yaml` runs Valkey with an in-cluster Service, `agent.yaml` runs the agent, and `service.yaml` is the public front door. Then apply them. `sed` puts your NodeBalancer's id into the Service:
+The database says `updating` for under a minute while the change rolls out.
+
+## Step 5: Deploy
+
+Read the three manifests in `k8s/` first: `valkey.yaml` runs Valkey with an in-cluster Service, `agent.yaml` runs the agent, and `service.yaml` is the public front door. Then apply them:
 
 ```bash
-kubectl apply -f k8s/valkey.yaml -f k8s/agent.yaml
-sed "s/NODEBALANCER_ID/$NB_ID/" k8s/service.yaml | kubectl apply -f -
+kubectl apply -f k8s/valkey.yaml -f k8s/agent.yaml -f k8s/service.yaml
 kubectl -n hackmidwest rollout status deployment/agent --timeout=600s
 kubectl -n hackmidwest get pods,services
 ```
 
-`[Unverified: not yet run on a live LKE cluster]` `rollout status` waits until the agent pod passes its readiness check, which takes about a minute while it installs packages, and gives up after 10 minutes. `get services` shows the `agent` Service with your NodeBalancer's address under EXTERNAL-IP. If the rollout gives up, read the agent's log:
+```
+deployment.apps/valkey created
+service/valkey created
+deployment.apps/agent created
+service/agent created
+Waiting for deployment "agent" rollout to finish: 0 of 1 updated replicas are available...
+deployment "agent" successfully rolled out
+NAME                         READY   STATUS    RESTARTS   AGE
+pod/agent-5679f46fdc-vtqpq   1/1     Running   0          27s
+pod/valkey-979dbf59c-ppgkr   1/1     Running   0          28s
+
+NAME             TYPE           CLUSTER-IP       EXTERNAL-IP       PORT(S)        AGE
+service/agent    LoadBalancer   10.128.117.69    198.51.100.20     80:32455/TCP   27s
+service/valkey   ClusterIP      10.128.180.124   <none>            6379/TCP       28s
+```
+
+`rollout status` waits until the agent pod passes its readiness check, which took about 30 seconds on 2026-10-02 while the pod installed its packages. It gives up after 10 minutes. If it does, read the agent's log:
 
 ```bash
 kubectl -n hackmidwest logs deployment/agent
 ```
+
+The `agent` Service has type LoadBalancer. On LKE, that makes the cluster create a NodeBalancer and point it at your node. Its public address is the EXTERNAL-IP, which appeared 7 seconds after the Service on 2026-10-02. If it says `<pending>`, wait a few seconds and run `kubectl -n hackmidwest get services` again.
+
+## Step 6: Name the NodeBalancer
+
+The cluster names its NodeBalancer after itself, such as `lke662761-97045693dd69`. Give it the kit's name, so you can tell it apart in Cloud Manager and `scripts/down.sh` can find it. Look it up by its address, then rename it:
+
+```bash
+NB_IP=$(kubectl -n hackmidwest get service agent -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+NB_ID=$(linode-cli nodebalancers list --ipv4 $NB_IP --text --no-headers --format id)
+linode-cli nodebalancers update $NB_ID --label hackmidwest-nb --format id,label,ipv4
+```
+
+```
+┌─────────┬────────────────┬───────────────┐
+│ id      │ label          │ ipv4          │
+├─────────┼────────────────┼───────────────┤
+│ 2504574 │ hackmidwest-nb │ 198.51.100.20 │
+└─────────┴────────────────┴───────────────┘
+```
+
+The cluster keeps managing the NodeBalancer under its new name: it finds it by its address, not its name. In Cloud Manager, open **NodeBalancers**: `hackmidwest-nb` is there, with the tag `kubernetes`. A NodeBalancer costs $0.015 an hour.
 
 ## Step 7: Check it
 
@@ -166,7 +233,14 @@ curl -X POST http://$NB_IP/chat -H "Content-Type: application/json" \
   -d '{"session_id": "lke-demo", "message": "When is our demo slot?"}'
 ```
 
-`[Unverified: not yet run on a live LKE cluster]` `/health` lists the four roles, with `reflexes` at `valkey:6379`. The chat answer comes from the same database as before, so the demo slot you saved in guide 02 is still there. Open `http://<NB_IP>` in a browser for the chat page; the NodeBalancer listens on port 80.
+```json
+{"status":"ok","brain":{"state":"live","detail":"hackathon-chat at https://ws.akamai-workshops.com/v1"},"knowledge":{"state":"live","detail":"bucket hackmidwest-e02dabda at us-sea-1.linodeobjects.com"},"memory":{"state":"live","detail":"PostgreSQL 17.11 at a123456-akamai-prod-1234567-default.g2a.akamaidb.net:15268, pgvector 0.8.6"},"reflexes":{"state":"live","detail":"Valkey 8.1.10 at valkey:6379: embedding cache, 20 messages a minute per session"}}
+{"reply":"Your demo slot is at 2:15 PM.","tools_used":["recall"]}
+```
+
+If `curl` says it could not connect, the NodeBalancer is still applying its settings. On 2026-10-02 it answered 45 seconds after the Service appeared; 35 seconds was too soon. Wait and run it again.
+
+All four roles are live, with `reflexes` at the Valkey Service, `valkey:6379`. The chat answer comes from the same database as before, so the demo slot you saved in guide 02 is still there. Open `http://<NB_IP>` in a browser for the chat page; the NodeBalancer listens on port 80.
 
 ## Step 8: Read the manifest you just used
 
@@ -199,31 +273,38 @@ rm agent.tgz
 kubectl -n hackmidwest rollout restart deployment/agent
 ```
 
-Installing packages on every start costs a minute and needs PyPI to be up. That is fine for a hackathon and wrong for production, where you build an image once and push it to a registry, as module 8 of the solution architect agent workshop does.
+Installing packages on every start costs half a minute and needs PyPI to be up. That is fine for a hackathon and wrong for production, where you build an image once and push it to a registry, as module 8 of the solution architect agent workshop does.
 
 ## Validation
 
 - `kubectl get nodes` shows one `Ready` node.
 - `kubectl -n hackmidwest get pods` shows `agent` and `valkey` running.
-- `curl http://$NB_IP/health` shows four roles.
+- `curl http://$NB_IP/health` shows four roles, all `live`.
+- `linode-cli nodebalancers list --label hackmidwest-nb --format id,label,ipv4` shows the NodeBalancer with the same address as the Service's EXTERNAL-IP.
 
 **Show the judges:** Cloud Manager, **Kubernetes**, then `hackmidwest-lke` and its node pool, and **NodeBalancers**, then `hackmidwest-nb`. From the terminal, `kubectl -n hackmidwest get pods,services` shows the agent behind the NodeBalancer's address, and `http://<NB_IP>/health` shows what it is connected to.
 
 ## Clean up
 
-The cluster's node and the NodeBalancer bill by the hour until you delete them. Look up the ids, then delete the cluster first, so nothing recreates the NodeBalancer, then the NodeBalancer, then the kubeconfig:
+The cluster's node and the NodeBalancer bill by the hour until you delete them. Delete the Service first: the cluster then deletes the NodeBalancer it made, which took a second on 2026-10-02. Then delete the cluster and the kubeconfig:
 
 ```bash
+kubectl -n hackmidwest delete service agent
 CLUSTER_ID=$(linode-cli lke clusters-list --label hackmidwest-lke --text --no-headers --format id)
-NB_ID=$(linode-cli nodebalancers list --label hackmidwest-nb --text --no-headers --format id)
 linode-cli lke cluster-delete $CLUSTER_ID
-linode-cli nodebalancers delete $NB_ID
 rm hackmidwest-kubeconfig.yaml
 ```
 
-Deleting the cluster deletes its node Linode. Then take the node's address off the database's allow list by setting the list again without it, as in step 5. Akamai gives freed addresses to other customers. Left running, this module costs $0.033 an hour: $0.018 for the node and $0.015 for the NodeBalancer. Cloud Manager's **Kubernetes** and **NodeBalancers** pages should no longer list them.
+Deleting the cluster deletes its node Linode. If you deleted the cluster before the Service, the NodeBalancer stays and keeps billing. Delete it by name:
 
-`scripts/down.sh` also finds `hackmidwest-lke` and `hackmidwest-nb` and deletes them.
+```bash
+NB_ID=$(linode-cli nodebalancers list --label hackmidwest-nb --text --no-headers --format id)
+linode-cli nodebalancers delete $NB_ID
+```
+
+Then take the node's address off the database's allow list by setting the list again without it, as in step 4. Akamai gives freed addresses to other customers. Left running, this module costs $0.033 an hour: $0.018 for the node and $0.015 for the NodeBalancer. Cloud Manager's **Kubernetes** and **NodeBalancers** pages should no longer list them.
+
+`scripts/down.sh` also finds `hackmidwest-lke` and `hackmidwest-nb` and deletes them. While the cluster runs, it also finds the NodeBalancer when you skipped step 6.
 
 ## Next steps
 

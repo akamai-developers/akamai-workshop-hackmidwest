@@ -1,4 +1,5 @@
 """Memory: the in-process fallback, and PostgresMemory with psycopg mocked."""
+import socket
 from unittest import mock
 
 import psycopg
@@ -7,6 +8,13 @@ import pytest
 from agent import config, memory
 
 PG_URL = "postgresql://akmadmin:pa55word@db.example.com:15268/defaultdb?sslmode=require"
+
+
+@pytest.fixture(autouse=True)
+def fake_dns(monkeypatch):
+    """PostgresMemory looks up the database's IPv4 address. Answer without the network."""
+    answer = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.10", 0))]
+    monkeypatch.setattr(memory.socket, "getaddrinfo", lambda *args, **kwargs: answer)
 
 
 def test_local_history_is_per_session_and_capped():
@@ -133,3 +141,24 @@ def test_postgres_reconnects_once_after_a_dropped_connection():
         mem = memory.PostgresMemory(PG_URL)
         assert mem.document_keys() == {"parking.md"}
     assert mem.conn is second
+
+
+def test_postgres_connects_over_ipv4_and_keeps_the_host_name():
+    conn = mock.MagicMock()
+    conn.execute.side_effect = [FakeCursor([("17.6",)]), FakeCursor([("0.8.0",)])]
+    with mock.patch("psycopg.connect", return_value=conn) as connect, mock.patch("pgvector.psycopg.register_vector"):
+        memory.PostgresMemory(PG_URL)
+    assert connect.call_args.args == (PG_URL,)  # the host name stays in the URL, for TLS
+    assert connect.call_args.kwargs["hostaddr"] == "192.0.2.10"
+
+
+def test_ipv4_of_leaves_the_lookup_to_psycopg_when_there_is_no_ipv4_answer(monkeypatch):
+    def no_answer(*args, **kwargs):
+        raise socket.gaierror("Name or service not known")
+
+    monkeypatch.setattr(memory.socket, "getaddrinfo", no_answer)
+    assert memory.ipv4_of(PG_URL) is None
+
+
+def test_ipv4_of_ignores_settings_that_are_not_a_url():
+    assert memory.ipv4_of("host=db.example.com user=akmadmin") is None

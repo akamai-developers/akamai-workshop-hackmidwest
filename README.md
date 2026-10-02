@@ -71,7 +71,7 @@ The fastest proof is the agent itself: `http://<your Linode address>:8000/health
 | 4 | [Kubernetes on LKE (optional)](docs/04_lke.md) | An LKE cluster and a NodeBalancer | 15 |
 | 5 | [Valkey reflexes (optional)](docs/05_valkey.md) | An embedding cache and a per-session rate limit | 15 |
 
-Measured on 2026-10-02: the database was active 6 minutes after it was created, and `scripts/deploy_linode.sh` had the agent answering on its Linode 3 minutes 9 seconds after it started. [agent/README.md](agent/README.md) explains the code, and every link the guides rely on is in [docs/links.md](docs/links.md).
+Rehearsed on 2026-10-02 by pasting every command in the guides: from `git clone` to the agent answering on its Linode took about 15 minutes of commands and waiting. The database took 7.5 of those minutes to start and reach DNS; guide 01 starts it first, so it builds while you work. Reading and typing fill the rest of the 45. The three scripts of the 30-minute path took 3 minutes 40 seconds. [agent/README.md](agent/README.md) explains the code, and every link the guides rely on is in [docs/links.md](docs/links.md).
 
 ## The 30-minute path and rebuilding
 

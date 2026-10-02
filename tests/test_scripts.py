@@ -72,3 +72,19 @@ def test_scripts_stop_without_env_file(tmp_path):
     assert result.returncode != 0
     assert "cp .env.example .env" in result.stdout
     assert "should-not-print" not in result.stdout
+
+
+def test_down_succeeds_when_everything_is_already_gone(tmp_path):
+    """A second run of down.sh, or one after the guides' clean up, finds nothing and still empties .env."""
+    scratch_repo(tmp_path, "OBJ_BUCKET=hackmidwest-gone1234\nOBJ_KEY_ID=\nDATABASE_URL=postgresql://x@db:1/d\n")
+    shutil.copy(ROOT / "scripts" / "down.sh", tmp_path / "scripts" / "down.sh")
+    # A linode-cli that finds nothing, and answers obj ls the way the real one does for a missing bucket.
+    fake_cli = tmp_path / ".venv" / "bin" / "linode-cli"
+    fake_cli.write_text('#!/bin/sh\nif [ "$1 $2" = "obj ls" ]; then echo "No bucket named $3" >&2; exit 2; fi\nexit 0\n')
+    result = subprocess.run(["bash", "scripts/down.sh", "--yes"], cwd=tmp_path, capture_output=True, text=True,
+                            env={**os.environ, "HOME": str(tmp_path)})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "  none" in result.stdout
+    settings = dict(line.split("=", 1) for line in (tmp_path / ".env").read_text().splitlines())
+    keys = ["OBJ_ENDPOINT", "OBJ_BUCKET", "OBJ_ACCESS_KEY", "OBJ_SECRET_KEY", "OBJ_KEY_ID", "DATABASE_URL"]
+    assert {key: settings.get(key) for key in keys} == dict.fromkeys(keys, "")

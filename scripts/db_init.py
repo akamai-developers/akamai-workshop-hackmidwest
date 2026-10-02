@@ -10,7 +10,7 @@ from pathlib import Path
 
 import psycopg
 
-from agent import config
+from agent import config, memory
 
 SQL_DIR = Path(__file__).resolve().parent.parent / "agent" / "sql"
 
@@ -21,10 +21,15 @@ def main() -> int:
         print("DATABASE_URL is empty in .env. When the database is active, run: bash scripts/status.sh")
         return 1
     try:
-        conn = psycopg.connect(cfg.database_url, autocommit=True, connect_timeout=10)
+        conn = psycopg.connect(cfg.database_url, hostaddr=memory.ipv4_of(cfg.database_url), autocommit=True,
+                               connect_timeout=10)
     except psycopg.OperationalError as error:
         print(f"Could not connect to {config.host_of(cfg.database_url)}: {str(error).strip()}")
-        print("Check that the database is active and that your current IP address is on its allow list.")
+        if "resolve host" in str(error):
+            print("A new database can be active a few minutes before its host name is in DNS. "
+                  "Wait two minutes and run this again.")
+        else:
+            print("Check that the database is active and that your current IP address is on its allow list.")
         return 1
     with conn:
         for path in sorted(SQL_DIR.glob("*.sql")):

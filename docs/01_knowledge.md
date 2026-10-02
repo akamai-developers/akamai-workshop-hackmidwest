@@ -58,18 +58,22 @@ linode-cli databases postgresql-create \
   --type g6-nanode-1 \
   --engine postgresql/17 \
   --cluster_size 1 \
-  --allow_list "$MY_IP/32"
+  --allow_list "$MY_IP/32" \
+  --format id,label,region,type,status
 ```
 
-The fields that matter: `--type g6-nanode-1` is the smallest plan, 1 GB of memory for $0.024 an hour. `--cluster_size 1` means one node; 3 would add two standbys for high availability. `--allow_list` takes addresses in CIDR form, and `/32` means exactly one address. An empty allow list would block every connection.
+The fields that matter: `--type g6-nanode-1` is the smallest plan, 1 GB of memory for $0.024 an hour. `--cluster_size 1` means one node; 3 would add two standbys for high availability. `--allow_list` takes addresses in CIDR form, and `/32` means exactly one address. An empty allow list would block every connection. `--format` picks the columns to print, so the table fits in a narrow terminal.
 
 ```
-┌────────┬────────────────┬────────┬─────────────┬──────────────┬────────────┬─────────┬───────────────┬──────────────┐
-│ id     │ label          │ region │ type        │ cluster_size │ engine     │ version │ platform      │ status       │
-├────────┼────────────────┼────────┼─────────────┼──────────────┼────────────┼─────────┼───────────────┼──────────────┤
-│ 533120 │ hackmidwest-db │ us-sea │ g6-nanode-1 │ 1            │ postgresql │ 17      │ rdbms-default │ provisioning │
-└────────┴────────────────┴────────┴─────────────┴──────────────┴────────────┴─────────┴───────────────┴──────────────┘
+Using default values: {}; use the --no-defaults flag to disable defaults
+┌────────┬────────────────┬────────┬─────────────┬──────────────┐
+│ id     │ label          │ region │ type        │ status       │
+├────────┼────────────────┼────────┼─────────────┼──────────────┤
+│ 533120 │ hackmidwest-db │ us-sea │ g6-nanode-1 │ provisioning │
+└────────┴────────────────┴────────┴─────────────┴──────────────┘
 ```
+
+linode-cli prints the first line before any command that could use a saved default, such as a region. The braces are empty because you skipped the defaults in the pre-work, so nothing was filled in for you.
 
 In Cloud Manager, open **Databases**: `hackmidwest-db` is there with the status Provisioning. Keep its id in a variable for later commands. This looks it up by label, so it works in any terminal:
 
@@ -106,10 +110,11 @@ linode-cli obj mb $BUCKET --cluster us-sea-1
 ```
 
 ```
+Cleaning up old linode-cli generated Object Storage keys. To disable this, use the '--key-cleanup-enabled no' option.
 Bucket hackmidwest-e02dabda created
 ```
 
-`linode-cli obj` is the CLI's Object Storage plugin. It talks to the bucket over the S3 API, so it needs an access key of its own. The first time you run it, it creates one named `linode-cli-<you>@<computer>-<number>` and saves it in the CLI's config file. You will see that key in Cloud Manager next to the one you make in step 3.
+`linode-cli obj` is the CLI's Object Storage plugin. It talks to the bucket over the S3 API, so it needs an access key of its own. The first time you run it, it creates one named `linode-cli-<you>@<computer>-<number>` and saves it in the CLI's config file. You will see that key in Cloud Manager next to the one you make in step 3. The first line of the output shows up once a day: the plugin deletes the keys it made itself more than 30 days ago. It only deletes keys named in that `linode-cli-` pattern.
 
 In Cloud Manager, open **Object Storage > Buckets**. Your bucket is listed in Seattle.
 

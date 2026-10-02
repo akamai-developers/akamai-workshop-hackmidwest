@@ -18,7 +18,7 @@ The model keeps nothing between requests. The agent's memory has lived in a Pyth
 
 Three things move into the database: the messages of each conversation, the vectors of your documents, and the notes the agent saves with its `remember` tool. A Managed Database means Akamai runs the server, the backups, and the updates. You get a host name, a port, a user, and a password.
 
-On 2026-10-02 the database from guide 01 turned active 6 minutes after it was created, and its host name answered in DNS about 2 minutes after that. Akamai's documentation says to allow 10 to 15 minutes.
+On 2026-10-02 two test databases turned active 5 and 6 minutes after they were created, and their host names answered in DNS 2 to 3 minutes after that. Akamai's documentation says to allow 10 to 15 minutes.
 
 ## Learning objectives
 
@@ -60,12 +60,12 @@ python -m agent --once "When is our demo slot?"
 The same four status lines print first. They are left out of the outputs below.
 
 ```
-Let me check what I have saved about your team.
-  [tool] recall({"query": "demo slot time team"})
-I don't have a saved demo slot for your team yet. Could you tell me your team name or the time you were assigned? I can save it so I can answer this faster next time.
+  [tool] recall({"query": "demo slot time"})
+  [tool] search_docs({"query": "demo slot schedule times"})
+I don't have a specific demo slot saved for your team. The schedule in schedule.md says judging runs Sunday from 1:00 PM to 3:30 PM, and teams demo at their tables in the order shown on the screen. Each team gets three minutes to demo plus two minutes for questions, per rules.md. Check the screen on Sunday for your exact slot.
 ```
 
-Same conversation, new process. The first process saved the fact in a Python list, and the list ended with the process. The second process started with nothing.
+Same conversation, new process. `recall` found no note, so the agent fell back to the documents in your bucket. The first process saved the fact in a Python list, and the list ended with the process. The second process started with nothing.
 
 ## Step 2: Check that the database is ready
 
@@ -130,6 +130,8 @@ PostgreSQL 17.11
 pgvector 0.8.6
 tables: documents, messages, sessions
 ```
+
+If it says the host name is not in DNS yet, wait two minutes and run it again.
 
 The script runs every file in `agent/sql/`. The first line of `001_init.sql` turns pgvector on, and the documents table uses its `vector` type:
 
