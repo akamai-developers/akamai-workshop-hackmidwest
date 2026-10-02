@@ -1,46 +1,57 @@
-# Costs
+# Costs and cleanup
 
-Every resource this kit creates, with its price in Seattle (`us-sea`). Prices were read from the public API with `linode-cli` on 2026-10-02. Run the command in the last column to check them yourself.
+[Workshop home](../README.md) · [Setup](00_prework.md)
 
-Akamai bills each resource by the hour, up to a monthly cap. In the words of the billing docs: "Charges accrue for any service present on an account, even if it's powered off or otherwise not actively being used." A stopped Linode still costs money. Delete what you are done with.
+Cloud labs create billable resources. Check the selected region, plan, account promotion, and current price before creation. Powering off a resource does not necessarily stop billing.
 
-## What each resource costs
+## What each path creates
 
-| Resource | Created in | Plan | Per hour | Monthly cap | Check it with |
-|---|---|---|---|---|---|
-| Managed PostgreSQL `hackmidwest-db` | Guide 01, step 1 | `g6-nanode-1`, 1 node | $0.024 | $16 | `linode-cli databases type-view g6-nanode-1` |
-| Object Storage, which holds the bucket `hackmidwest-<id>` | Guide 01 | Flat fee per account | $0.0075 | $5 | `linode-cli object-storage types` |
-| Object Storage access key `hackmidwest-key` | Guide 01 | | free | free | |
-| Linode `hackmidwest-agent` | Guide 03 | `g6-standard-1`: 1 CPU, 2 GB | $0.018 | $12 | `linode-cli linodes types` |
-| Cloud Firewall `hackmidwest-fw` | Guide 03 | | free | free | [Cloud Firewall docs](https://techdocs.akamai.com/cloud-computing/docs/cloud-firewall): "available at no charge across all regions" |
-| Valkey | Guide 03 | A container on the Linode | free | free | |
-| LKE cluster `hackmidwest-lke`, control plane | Guide 04 (optional) | Standard (`lke-sa`) | $0.00 | $0 | `linode-cli lke types` |
-| LKE worker node | Guide 04 (optional) | `g6-standard-1` | $0.018 | $12 | `linode-cli linodes types` |
-| NodeBalancer `hackmidwest-nb`, made by the cluster | Guide 04 (optional) | `common` | $0.015 | $10 | `linode-cli nodebalancers types` |
+| Path | Resources to track |
+|---|---|
+| Inference notebooks only | Uses the shared service's team quota; creates no resources in your cloud account |
+| Object Storage lab | Bucket, application access key, and possibly a CLI-generated key |
+| PostgreSQL lab | One Managed PostgreSQL instance |
+| `scripts/up.sh --no-db` | Bucket and application access key |
+| `scripts/up.sh` | Bucket, access key, and Managed PostgreSQL |
+| Linode deployment | Linode, Cloud Firewall, app and Valkey containers on that VM |
+| LKE deployment | Cluster, worker node, NodeBalancer, app and Valkey pods |
 
-The Linode includes 2 TB of outbound transfer a month and Object Storage includes 1 TB, both shown as `transfer` in the commands above. Object Storage beyond the flat fee costs $0.02 per GB (`objectstorage-overage`). The kit stores a few kilobytes.
+A Valkey container has no separate managed-service charge but uses your compute resources. Running both deployment paths leaves both the standalone Linode and the LKE resources active.
 
-## Totals
+## Check current prices
 
-| What is running | Per hour | Per day | Monthly cap |
-|---|---|---|---|
-| Guided path: database, bucket, Linode, firewall | $0.0495 | $1.19 | $33 |
-| 30-minute path: bucket, Linode, firewall, no database | $0.0255 | $0.61 | $17 |
-| The optional LKE module on top | +$0.033 | +$0.79 | +$22 |
+Use [Akamai Cloud pricing](https://www.akamai.com/cloud/pricing), Cloud Manager, and the CLI:
 
-## What the $300 credit covers
+```bash
+linode-cli linodes types
+linode-cli databases type-view g6-nanode-1
+linode-cli object-storage types
+linode-cli nodebalancers types
+linode-cli lke types
+```
 
-At $1.19 a day, the guided stack uses about $3 of credit over a hackathon weekend. Cloud Manager shows your credit and when it expires under **Administration > Billing**.
+The supplied scripts use `g6-standard-1` for compute and `g6-nanode-1` for PostgreSQL. Prices depend on service and region. Include storage and transfer overages, load balancers, extra nodes, and any add-ons in your estimate. Check the remaining promotional credit and its expiry under **Administration > Billing**.
 
-Two charges outlive a normal teardown:
+## Review before deleting
 
-- **Object Storage** bills $5 a month for the account until you cancel it. Deleting the bucket does not stop it. Cancelling deletes every bucket on the account, so `scripts/down.sh` never does it for you. Follow [Cancel Object Storage](https://techdocs.akamai.com/cloud-computing/docs/cancel-object-storage) when you are sure.
-- **Anything you created outside the kit.** `scripts/down.sh` only deletes resources whose label starts with `hackmidwest-`.
-
-## Stop the charges
-
-Each guide ends with a Clean up section that deletes what that guide created. `scripts/down.sh` deletes everything labeled `hackmidwest-*` after asking you to confirm:
+Export any data you want to retain. From the workshop directory:
 
 ```bash
 bash scripts/down.sh
 ```
+
+The script shows candidate resources and requires `yes` before deleting them. Read every name and ID. It selects resources using fixed workshop labels, the bucket and key in `.env`, and, when needed, the LKE Service address. Names are not proof of ownership: an existing resource with a matching name can be selected.
+
+It may select the workshop Linode, firewall, database, cluster, NodeBalancer, bucket, and application access key. Do not confirm if another project uses them. Use Cloud Manager for selective removal instead. The script does not cancel the account-wide Object Storage service.
+
+## Confirm the result
+
+- Check **Linodes**, **Kubernetes**, **NodeBalancers**, **Databases**, **Firewalls**, and **Object Storage** in Cloud Manager.
+- Inspect any volumes or resources you created outside the workshop scripts.
+- Revoke unused API tokens and Object Storage keys, including CLI-generated keys.
+- Remove retired compute addresses from any database allow list you retain.
+- Check Billing for remaining services and charges.
+
+Deleting a bucket does not cancel Object Storage service billing. To cancel the service, follow [Cancel Object Storage](https://techdocs.akamai.com/cloud-computing/docs/cancel-object-storage). Cancellation deletes every bucket and object in the account, including data outside this workshop. Only cancel when none of that data is needed.
+
+References: [How billing works](https://techdocs.akamai.com/cloud-computing/docs/understanding-how-billing-works), [Object Storage pricing](https://techdocs.akamai.com/cloud-computing/docs/object-storage-pricing), [Stop further billing](https://techdocs.akamai.com/cloud-computing/docs/stop-further-billing).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The body: the same commands you type in guide 03, in one file, for when you rebuild.
+# Deploy the starter on a Linode. See docs/03_body.md for the runtime lab.
 # Creates a Cloud Firewall and a Linode in Seattle, waits for cloud-init to install Docker,
 # lets the Linode into the database, copies the code and .env over SSH, starts docker compose,
 # and waits until http://<ip>:8000/health answers. Safe to run again.
@@ -86,3 +86,4 @@ curl -s "http://$ip:8000/health" | python -m json.tool
 echo
 echo "The agent is up after $(elapsed): http://$ip:8000"
 echo "SSH in with: ssh root@$ip"
+

@@ -82,7 +82,7 @@ def test_health_lists_every_role(client_with):
 def test_the_chat_page_is_served(client_with):
     response = client_with(FakeBrain()).get("/")
     assert response.status_code == 200
-    assert "<title>HackMidwest starter agent</title>" in response.text
+    assert "<title>Hack Midwest document assistant</title>" in response.text
 
 
 class FakeRedis:
@@ -155,3 +155,4 @@ def test_unreachable_valkey_turns_reflexes_off_with_the_reason():
     with mock.patch("redis.Redis.from_url", side_effect=ConnectionError("refused")):
         off = cache.connect(cfg)
     assert off.state == "error" and "refused" in off.detail and off.allow("web-1")
+

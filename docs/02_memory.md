@@ -1,285 +1,97 @@
-# Guide 02: Memory in Managed PostgreSQL
+# Lab: Keep application data in Managed PostgreSQL
 
-```
-  your laptop                         Akamai Cloud (us-sea, Seattle)
-  -----------------                   --------------------------------------------------------
-  linode-cli / python  ---creates-->  Linode "hackmidwest-agent" (body)
-                                        docker compose
-                                          agent (FastAPI, port 8000)   --tools-->  Object Storage bucket (knowledge)
-                                          valkey (reflexes)            --sql---->  Managed PostgreSQL + pgvector (memory)
-                                                                       --https-->  ws.akamai-workshops.com/v1 (brain)
-```
+[Workshop home](../README.md) · [Project paths](build.md) · [Retrieval notebook](../notebooks/02_embeddings_and_retrieval.ipynb)
 
-This guide adds **memory**: the Managed PostgreSQL database you started in guide 01, with the pgvector extension that stores and searches vectors.
+**Result:** conversation messages and document vectors remain available after the application restarts.
 
-## Overview
+**Prerequisites:** [setup](00_prework.md), activated account, database permissions, working inference key. Object Storage is optional; local sample files also work. Allow about 20–30 minutes including provisioning, which can vary. This lab creates a billable database.
 
-The model keeps nothing between requests. The agent's memory has lived in a Python list so far, which is gone the moment the process exits. You will see that first. Then you connect the agent to Managed PostgreSQL, enable pgvector, and watch a fact saved in one conversation come back in another, after a restart.
+PostgreSQL stores records and supports SQL queries. The starter also uses pgvector for embedding similarity search. You manage the schema and application access; Akamai's managed service operates the database infrastructure.
 
-Three things move into the database: the messages of each conversation, the vectors of your documents, and the notes the agent saves with its `remember` tool. A Managed Database means Akamai runs the server, the backups, and the updates. You get a host name, a port, a user, and a password.
+## 1. Create the database
 
-On 2026-10-02 two test databases turned active 5 and 6 minutes after they were created, and their host names answered in DNS 2 to 3 minutes after that. Akamai's documentation says to allow 10 to 15 minutes.
-
-## Learning objectives
-
-By the end of this guide you will be able to:
-
-- Show why memory inside the agent process is not enough
-- Read a database's host, port, and credentials with `linode-cli`
-- Write a PostgreSQL connection string that requires TLS
-- Enable pgvector and create the agent's tables
-- Show a conversation and a saved fact surviving a restart
-- Find the code in `agent/memory.py` that you would change for your project
-
-## Prerequisites
-
-- [Guide 01](01_knowledge.md) done, with the database from its step 1
-- About 10 minutes
-
-## Step 1: Watch the agent forget
-
-The agent has a `remember` tool. Ask it to keep a fact, then ask for that fact from a new process:
+Find your public IPv4 address and check it before using it in the allow list:
 
 ```bash
-python -m agent --once "Remember that our demo slot is 2:15 PM."
+MY_IP=$(curl -fsS https://api.ipify.org)
+printf '%s\n' "$MY_IP"
+linode-cli databases postgresql-create \
+  --label hackmidwest-db \
+  --region us-sea \
+  --type g6-nanode-1 \
+  --engine postgresql/17 \
+  --cluster_size 1 \
+  --allow_list "$MY_IP/32" \
+  --format id,label,region,type,status
 ```
 
-```
-brain      live      hackathon-chat at https://ws.akamai-workshops.com/v1
-knowledge  live      bucket hackmidwest-e02dabda at us-sea-1.linodeobjects.com
-memory     fallback  kept in this process only, forgotten on restart. Set DATABASE_URL in .env.
-reflexes   off       no cache and no rate limit. Set VALKEY_URL to turn them on.
-  [tool] remember({"fact": "The team's demo slot is 2:15 PM."})
-Got it, your demo slot is 2:15 PM.
-```
+If `hackmidwest-db` already exists for your team, inspect it and reuse it instead of creating another. Verify the plan and engine are available in your account before creating the resource. This example uses one node and does not provide standby-node redundancy.
 
-```bash
-python -m agent --once "When is our demo slot?"
-```
+The `/32` permits one IPv4 address. On venue Wi-Fi, many participants may share that public address; the database still requires credentials. Do not use an allow list of all addresses to work around a connection issue.
 
-The same four status lines print first. They are left out of the outputs below.
-
-```
-  [tool] recall({"query": "demo slot time"})
-  [tool] search_docs({"query": "demo slot schedule times"})
-I don't have a specific demo slot saved for your team. The schedule in schedule.md says judging runs Sunday from 1:00 PM to 3:30 PM, and teams demo at their tables in the order shown on the screen. Each team gets three minutes to demo plus two minutes for questions, per rules.md. Check the screen on Sunday for your exact slot.
-```
-
-Your wording will differ. What matters is that `recall` finds nothing, so the agent falls back to the documents in your bucket. Same conversation, new process. The first process saved the fact in a Python list, and the list ended with the process. The second process started with nothing.
-
-## Step 2: Check that the database is ready
+## 2. Wait and configure the connection
 
 ```bash
 linode-cli databases postgresql-list --label hackmidwest-db --format id,label,status
+bash scripts/status.sh
 ```
 
-The status must be `active`. While it says `provisioning`, wait a minute and ask again. Then put its id in a variable, the same lookup as in guide 01, and read where the database lives:
+The script waits for `active` status and DNS resolution, retrieves connection details, percent-encodes the password, and writes `DATABASE_URL` to `.env`. It does not print the password. If the database remains provisioning, check Cloud Manager; you can interrupt the wait and return later.
 
-```bash
-DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
-linode-cli databases postgresql-view $DB_ID --format status,hosts.primary,port
-```
-
-```
-┌────────┬──────────────────────────────────────────────────────┬───────┐
-│ status │ hosts.primary                                        │ port  │
-├────────┼──────────────────────────────────────────────────────┼───────┤
-│ active │ a123456-akamai-prod-1234567-default.g2a.akamaidb.net │ 15268 │
-└────────┴──────────────────────────────────────────────────────┴───────┘
-```
-
-`hosts.primary` is the server's host name and `port` is its port. Managed Databases do not use PostgreSQL's usual port 5432.
-
-## Step 3: Read the password
-
-```bash
-linode-cli databases postgresql-creds-view $DB_ID
-```
-
-```
-┌──────────┬──────────────────────────┐
-│ username │ password                 │
-├──────────┼──────────────────────────┤
-│ akmadmin │ <password>               │
-└──────────┴──────────────────────────┘
-```
-
-`akmadmin` is the administrator account Akamai creates for you. The password on 2026-10-02 was 24 letters, digits, and underscores.
-
-## Step 4: Write DATABASE_URL
-
-A PostgreSQL connection string puts all of it in one line. Add it to `.env` with your password, host, and port, for example with `nano .env`:
+For your own application, the connection string has this shape:
 
 ```ini
-DATABASE_URL=postgresql://akmadmin:<password>@a123456-akamai-prod-1234567-default.g2a.akamaidb.net:15268/defaultdb?sslmode=require
+DATABASE_URL=postgresql://akmadmin:<encoded-password>@<host>:<port>/defaultdb?sslmode=require
 ```
 
-`defaultdb` is the database Akamai creates on the server. `sslmode=require` makes the connection use TLS, and the server refuses connections without it.
+Use the actual host and port returned by the service. `sslmode=require` encrypts the connection; use the supplied CA certificate and `verify-full` when configuring certificate verification. For an application beyond this exercise, create a dedicated database and a user with only the permissions it needs.
 
-> NOTE: If the host name does not resolve yet, wait two minutes. A brand-new database can be `active` before its name is in DNS. If your password ever contains characters other than letters, digits, `-`, and `_`, percent-encode them or use `scripts/status.sh`, which does it for you.
-
-## Step 5: Enable pgvector and create the tables
+## 3. Create the starter schema
 
 ```bash
 python scripts/db_init.py
 ```
 
-```
-ran agent/sql/001_init.sql
-PostgreSQL 17.11
-pgvector 0.8.6
-tables: documents, messages, sessions
-```
+Expected result: PostgreSQL and pgvector versions, and the `documents`, `messages`, and `sessions` tables. The script applies files in [agent/sql](../agent/sql) in filename order. The existing schema can be applied again.
 
-If it says the host name is not in DNS yet, wait two minutes and run it again.
+The `documents.embedding` column is `vector(1024)`, matching this workshop's embedding configuration. Use the same embedding model for documents and queries. Changing models requires re-embedding the stored text, even when vector dimensions match.
 
-The script runs every file in `agent/sql/`. The first line of `001_init.sql` turns pgvector on, and the documents table uses its `vector` type:
+For an existing app, apply your own schema instead of the starter's. A standard SQL use case does not require embeddings or pgvector.
 
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE TABLE IF NOT EXISTS documents (id BIGSERIAL PRIMARY KEY, object_key TEXT NOT NULL, chunk_index INT NOT NULL,
-                                      content TEXT NOT NULL, embedding vector(1024) NOT NULL, UNIQUE (object_key, chunk_index));
-CREATE INDEX IF NOT EXISTS documents_embedding_idx ON documents USING hnsw (embedding vector_cosine_ops);
+## 4. Verify persistence
+
+Run these as separate processes:
+
+```bash
+python -m agent --session demo-save --once "Remember that our demo slot is 2:15 PM."
+python -m agent --session demo-read --once "When is our demo slot?"
 ```
 
-`vector(1024)` matches the 1,024 numbers the embedding model returns. The HNSW index keeps the search fast once you have thousands of chunks. Every statement says `IF NOT EXISTS`, so running the script twice is safe.
+Check that the first request calls `remember`, the second calls `recall`, and the startup status reports PostgreSQL rather than process memory. The second request should retrieve the saved time.
 
-Tested on 2026-10-02: `CREATE EXTENSION vector` works for `akmadmin` on Akamai Managed PostgreSQL 17.
+The demo's saved notes are shared across sessions. Session IDs organize conversation history but do not provide authentication or private access to notes. Use fictional facts.
+
+## 5. Maintain the allow list
 
 ### When your address changes
 
-You need this only when `db_init.py` or the agent says `connection timeout expired`. The allow list holds the address your laptop had in guide 01. On another network, such as home, a hotel, or a phone hotspot, your laptop has a different public address, and the database ignores it. `db_init.py` waits 10 seconds, then says:
-
-```
-Could not connect to a123456-akamai-prod-1234567-default.g2a.akamaidb.net:15268: connection timeout expired
-The database ignores addresses that are not on its allow list. To add yours, see guide 02, step 5.
-```
-
-The agent waits the same 10 seconds when it starts, prints the same advice on its `memory` line, and keeps memory in the process until you fix it. Put your current address on the list. Set three variables first; `LINODE_IP` comes back empty if you have no Linode from guide 03:
-
-```bash
-MY_IP=$(curl -s https://api.ipify.org)
-DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
-LINODE_IP=$(linode-cli linodes list --label hackmidwest-agent --text --no-headers --format ipv4)
-echo $MY_IP $DB_ID $LINODE_IP
-```
-
-The update replaces the whole list, so name every address that should keep access. If you have the Linode from guide 03, keep it on the list, or the agent on it loses its memory:
-
-```bash
-linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$LINODE_IP/32" --format id,label,status
-```
-
-If you have no Linode, `LINODE_IP` is empty, and that command stops with `Invalid IPv4 or IPv6 address(es): /32` without changing anything. Use this one:
-
-```bash
-linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --format id,label,status
-```
-
-```
-┌────────┬────────────────┬──────────┐
-│ id     │ label          │ status   │
-├────────┼────────────────┼──────────┤
-│ 533120 │ hackmidwest-db │ updating │
-└────────┴────────────────┴──────────┘
-```
-
-On 2026-10-02 the new address could connect a few seconds after the update, while the status still said `updating`, so run what timed out again right away. If it still times out, the network may block the database's port; some guest Wi-Fi allows only web traffic. If guide 04's cluster is running, you can leave its node out: Akamai puts it back on the list within 10 minutes, as guide 04, step 4, explains.
-
-## Step 6: Ask again
-
-Save the fact again. The memory line now says `live`:
-
-```bash
-python -m agent --once "Remember that our demo slot is 2:15 PM."
-```
-
-```
-brain      live      hackathon-chat at https://ws.akamai-workshops.com/v1
-knowledge  live      bucket hackmidwest-e02dabda at us-sea-1.linodeobjects.com
-memory     live      PostgreSQL 17.11 at a123456-akamai-prod-1234567-default.g2a.akamaidb.net:15268, pgvector 0.8.6
-reflexes   off       no cache and no rate limit. Set VALKEY_URL to turn them on.
-  [tool] remember({"fact": "The team's demo slot is 2:15 PM."})
-Got it, your demo slot is 2:15 PM.
-```
-
-This time ask from a different conversation as well as a new process, as a teammate on another laptop would. `--session teammate` picks a second conversation:
-
-```bash
-python -m agent --once "When is our demo slot?" --session teammate
-```
-
-```
-  [tool] recall({"query": "demo slot time"})
-Your demo slot is at 2:15 PM.
-```
-
-The fact outlived the process that saved it, and a second conversation found it. The conversation itself is stored too. Ask in the first session, from yet another process:
-
-```bash
-python -m agent --once "What was the last thing I asked you?"
-```
-
-```
-You asked me to remember that your demo slot is 2:15 PM.
-```
-
-The document vectors moved to the database as well. The first start with `DATABASE_URL` indexed your bucket into the documents table. After that, restarts skip files that have not changed, so they cost no embedding requests.
-
-## Step 7: Read the code you just used
-
-Open `agent/memory.py`. `PostgresMemory` does the same jobs as the in-process fallback, in SQL:
-
-```python
-    def history(self, session_id: str, limit: int = HISTORY_LIMIT) -> list[dict]:
-        rows = self._run(
-            "SELECT role, content FROM (SELECT id, role, content FROM messages WHERE session_id = %s"
-            " ORDER BY id DESC LIMIT %s) AS recent ORDER BY id",
-            (session_id, limit),
-        )
-        return [{"role": role, "content": content} for role, content in rows]
-
-    def add_message(self, session_id: str, role: str, content: str) -> None:
-        self._run("INSERT INTO sessions (id) VALUES (%s) ON CONFLICT DO NOTHING", (session_id,))
-        self._run("INSERT INTO messages (session_id, role, content) VALUES (%s, %s, %s)", (session_id, role, content))
-
-    def search(self, vector: list[float], k: int = 3, notes: bool = False) -> list[Hit]:
-        rows = self._run(
-            "SELECT object_key, content, 1 - (embedding <=> %(v)s) FROM documents"
-            " WHERE starts_with(object_key, 'notes/') = %(notes)s"
-            " ORDER BY embedding <=> %(v)s LIMIT %(k)s",
-            {"v": np.asarray(vector, dtype=np.float32), "notes": notes, "k": k},
-        )
-        return [Hit(key, text, float(score)) for key, text, score in rows]
-```
-
-`history()` returns the last 20 messages, oldest first, which is what the model expects. `search()` is the whole vector search: `<=>` is pgvector's cosine distance, so `ORDER BY embedding <=> ...` returns the closest chunks first, and `1 - distance` turns it into a similarity score. Notes from `remember` are rows whose key starts with `notes/`, so `recall` runs the same query with `notes = true`.
-
-For your project, add tables in a new file such as `agent/sql/002_tasks.sql` and run `python scripts/db_init.py` again. To give each user private notes, put the session id in the note key and filter on it.
-
-## Validation
-
-- The startup line reads `memory  live  PostgreSQL 17... pgvector 0.8...`.
-- `python -m agent --once "When is our demo slot?" --session someone-else` answers 2:15 PM.
-- `python scripts/db_init.py` prints the pgvector version again and changes nothing.
-
-**Show the judges:** Cloud Manager, **Databases**, then `hackmidwest-db`: PostgreSQL 17 in Seattle, status Active, and your allow list on the **Networking** tab, under Manage Access. From the terminal, `linode-cli databases postgresql-list --label hackmidwest-db` shows it, and the agent's `memory live ... pgvector 0.8.6` line shows it is in use.
-
-## Clean up
-
-If you go on to guide 03, keep the database. The Linode in guide 03 uses it too.
-
-To delete it:
+A timeout often means your current network address is not allowed. Inspect the existing entries first:
 
 ```bash
 DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
-linode-cli databases postgresql-delete $DB_ID
+linode-cli databases postgresql-view "$DB_ID" --format allow_list
 ```
 
-Then empty `DATABASE_URL` in `.env`. Cloud Manager's **Databases** page no longer lists it. Left running, the database costs $0.024 an hour, up to $16 a month. Deleting it deletes every conversation, vector, and note in it.
+Use **Databases > your database > Networking** in Cloud Manager to add your current address while retaining other required entries. A CLI `postgresql-update --allow_list` replaces the full list; include every address you intend to retain.
 
-## Next steps
+The supplied Linode and LKE deployment scripts add their compute address while retaining existing entries. After a change has taken effect, restart the application if it previously fell back to process memory. Data written to process memory is not automatically migrated into PostgreSQL.
 
-Put the agent on its own server in [Guide 03: The body on a Linode](03_body.md).
+## Inspect the implementation
 
-`scripts/status.sh` does steps 2 to 4 for you when you rebuild: it waits for `active` and for DNS, then writes `DATABASE_URL` to `.env`. These are the same commands you just typed, in one file.
+[agent/memory.py](../agent/memory.py) stores conversation messages, text chunks, and saved notes. The search query orders rows by pgvector cosine distance using `<=>`. The application sends recent messages with each model request; the inference API does not keep the conversation for it. Message count alone does not guarantee that a request fits the model's token limit.
+
+## Verify and clean up
+
+Show the database in Cloud Manager and retrieve a value written by an earlier application process. If you continue to a runtime lab, keep the database. Otherwise use the reviewed resource list in [cleanup](costs.md). Deleting the database removes its data.
+
+Next: [Linode](03_body.md), [LKE](04_lke.md), or [your own application](build.md).

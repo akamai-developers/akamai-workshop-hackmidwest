@@ -8,11 +8,9 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 BOT_PROTECTED='^https?://(www\.)?(akamai|linode)\.com/'
-# This repository answers 404 while it is private. Students need it public to clone it.
-THIS_REPO='github\.com/akamai-developers/akamai-workshop-hackmidwest'
 # Placeholders and API endpoints that are not pages: <ip>, localhost, example hosts, the inference API.
 NOT_A_PAGE='[<>{}$]|localhost|127\.0\.0\.1|example\.(com|org)|ws\.akamai-workshops\.com|api\.linode\.com'
-UA="Mozilla/5.0 (link check for akamai-workshop-hackmidwest)"
+UA="Mozilla/5.0 (link check for Hack Midwest workshop)"
 
 # Tracked and new Markdown files, skipping anything .gitignore hides. File names have no spaces.
 files=$(git ls-files --cached --others --exclude-standard '*.md')
@@ -35,8 +33,6 @@ grep -ohE 'https?://[^] )>"`'"'"'|]+' $files | sed -E 's/[.,;:]+$//' | sort -u |
     echo "  ok   $code $url"
   elif [[ $code == 403 && $url =~ $BOT_PROTECTED ]]; then
     echo "  SKIP $code $url (blocks scripts, open it in a browser)"
-  elif [[ $code == 404 && $url =~ $THIS_REPO ]]; then
-    echo "  SKIP $code $url (this repository is private; make it public before the event)"
   else
     echo "  FAIL $code $url"
     echo "$url" >> "$failed"
@@ -78,3 +74,4 @@ if [[ $failures != 0 ]]; then
   exit 1
 fi
 echo "All links work."
+

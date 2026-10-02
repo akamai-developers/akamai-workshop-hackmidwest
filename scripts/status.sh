@@ -7,7 +7,7 @@ source "$(dirname "$0")/lib.sh"
 
 id=$(db_id)
 if [[ -z $id ]]; then
-  echo "No database labeled $DB_LABEL. Create it first: guide 01, step 1, or bash scripts/up.sh"
+  echo "No database labeled $DB_LABEL. Create it first: docs/02_memory.md, step 1, or bash scripts/up.sh"
   exit 1
 fi
 
@@ -35,3 +35,4 @@ password=$(python -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.arg
 set_env DATABASE_URL "postgresql://$user:$password@$host:$port/defaultdb?sslmode=require"
 echo
 echo "Wrote DATABASE_URL for $host:$port to .env. Next: python scripts/db_init.py"
+

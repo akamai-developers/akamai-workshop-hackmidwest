@@ -1,128 +1,25 @@
-# Guide 01: Knowledge in Object Storage
+# Lab: Store documents in Object Storage
 
-```
-  your laptop                         Akamai Cloud (us-sea, Seattle)
-  -----------------                   --------------------------------------------------------
-  linode-cli / python  ---creates-->  Linode "hackmidwest-agent" (body)
-                                        docker compose
-                                          agent (FastAPI, port 8000)   --tools-->  Object Storage bucket (knowledge)
-                                          valkey (reflexes)            --sql---->  Managed PostgreSQL + pgvector (memory)
-                                                                       --https-->  ws.akamai-workshops.com/v1 (brain)
-```
+[Workshop home](../README.md) · [Project paths](build.md) · [Retrieval notebook](../notebooks/02_embeddings_and_retrieval.ipynb)
 
-This guide adds **knowledge**: an Object Storage bucket that holds the documents your agent answers from. It also starts **memory**, the PostgreSQL database, because the database takes the longest to create and guide 02 needs it.
+**Result:** a private bucket holds your source documents, and the starter answers a question from one of them.
 
-## Overview
+**Prerequisites:** [setup](00_prework.md), activated account, configured CLI, working inference key. Allow about 15 minutes for the exercise, plus account or service delays. This lab creates a billable bucket and an access key. It does not require a database or a VM.
 
-Right now the agent knows only what the model learned in training. Ask it where to park at your venue and it has nothing to go on. In this guide you give it documents.
+Object Storage stores files through an S3-compatible API. The application reads text, creates embeddings, and searches the resulting vectors. With no database configured, the starter keeps those vectors in process memory.
 
-Object Storage is Akamai's S3-compatible file storage. You put files in a bucket, and any program with an access key can read them over HTTPS. The agent reads every text file in your bucket and cuts it into chunks of about 500 words. The embedding model turns each chunk into a vector of 1,024 numbers. When you ask a question, the agent searches those vectors by meaning.
+## 1. Create a bucket
 
-You create three things by hand with `linode-cli`: the database, the bucket, and an access key that can reach only that bucket. Then you watch the agent fail on an empty bucket, upload a file, and watch it answer.
-
-## Learning objectives
-
-By the end of this guide you will be able to:
-
-- Start a Managed PostgreSQL database with an IP allow list
-- Create an Object Storage bucket in Seattle
-- Create an access key limited to one bucket, and know why the agent should not get more
-- Connect the agent to the bucket through `.env`
-- Upload a document and see the agent answer from it
-- Find the 30 lines of `agent/knowledge.py` you would change for your own data
-
-## Prerequisites
-
-- [Pre-work](00_prework.md) done: `linode-cli` configured, the virtual environment active, and `python -m agent --once "Say hello"` answering
-- About 15 minutes
-
-## Step 1: Start the database
-
-The database is for guide 02, but it takes the longest to be ready, so you start it first and let it build while you work. A Managed Database only accepts connections from addresses on its allow list. Find your laptop's public IP address:
-
-```bash
-MY_IP=$(curl -s https://api.ipify.org)
-echo $MY_IP
-```
-
-```
-203.0.113.25
-```
-
-Now create the database. This is one PostgreSQL 17 server in Seattle on the smallest plan.
-
-```bash
-linode-cli databases postgresql-create \
-  --label hackmidwest-db \
-  --region us-sea \
-  --type g6-nanode-1 \
-  --engine postgresql/17 \
-  --cluster_size 1 \
-  --allow_list "$MY_IP/32" \
-  --format id,label,region,type,status
-```
-
-The fields that matter: `--type g6-nanode-1` is the smallest plan, 1 GB of memory for $0.024 an hour. `--cluster_size 1` means one node; 3 would add two standbys for high availability. `--allow_list` takes addresses in CIDR form, and `/32` means exactly one address. An empty allow list would block every connection. `--format` picks the columns to print, so the table fits in a narrow terminal.
-
-```
-Using default values: {}; use the --no-defaults flag to disable defaults
-┌────────┬────────────────┬────────┬─────────────┬──────────────┐
-│ id     │ label          │ region │ type        │ status       │
-├────────┼────────────────┼────────┼─────────────┼──────────────┤
-│ 533120 │ hackmidwest-db │ us-sea │ g6-nanode-1 │ provisioning │
-└────────┴────────────────┴────────┴─────────────┴──────────────┘
-```
-
-linode-cli prints the first line before any command that could use a saved default, such as a region. The braces are empty because you skipped the defaults in the pre-work, so nothing was filled in for you.
-
-> NOTE: If the command prints `Your account must be activated before you can use this endpoint`, Akamai is still reviewing your new account. Check your email for instructions, and pair with a teammate on their account until it clears. See [pre-work step 1](00_prework.md#step-1-create-your-account-with-300-of-credit).
-
-In Cloud Manager, open **Databases**: `hackmidwest-db` is there with the status Provisioning. Keep its id in a variable for later commands. This looks it up by label, so it works in any terminal:
-
-```bash
-DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
-echo $DB_ID
-```
-
-```
-533120
-```
-
-Do not wait for the database. Move on.
-
-> NOTE: On venue Wi-Fi, everyone shares one public address, so the allow list admits the whole venue network. The database still requires your password and TLS. Guide 03 adds your Linode's address to the list. On another network, such as home or a phone hotspot, your laptop has a different address; [guide 02, step 5](02_memory.md#when-your-address-changes) shows how to put it on the list.
-
-## Step 2: Create the bucket
-
-Bucket names are shared by every Akamai customer in a region, so yours needs something unique after `hackmidwest-`. Make a random suffix and keep the name in a variable:
+Use a unique name in the workshop's Seattle cluster:
 
 ```bash
 BUCKET=hackmidwest-$(openssl rand -hex 4)
-echo $BUCKET
+linode-cli obj mb "$BUCKET" --cluster us-sea-1
 ```
 
-```
-hackmidwest-e02dabda
-```
+Open **Object Storage > Buckets** in Cloud Manager and find the bucket. `linode-cli obj` may create its own access key for CLI operations. The application gets a separate key below.
 
-Create the bucket in the Seattle cluster, `us-sea-1`:
-
-```bash
-linode-cli obj mb $BUCKET --cluster us-sea-1
-```
-
-```
-Cleaning up old linode-cli generated Object Storage keys. To disable this, use the '--key-cleanup-enabled no' option.
-Bucket hackmidwest-e02dabda created
-```
-
-`linode-cli obj` is the CLI's Object Storage plugin. It talks to the bucket over the S3 API, so it needs an access key of its own. The first time you run it, it creates one named `linode-cli-<you>@<computer>-<number>` and saves it in the CLI's config file. You will see that key in Cloud Manager next to the one you make in step 3. The first line of the output shows up once a day: the plugin deletes the keys it made itself more than 30 days ago. It only deletes keys named in that `linode-cli-` pattern.
-
-In Cloud Manager, open **Object Storage > Buckets**. Your bucket is listed in Seattle.
-
-## Step 3: Create an access key for the agent
-
-The agent needs its own key. Give it one that can read and write this bucket and nothing else, so a leaked `.env` exposes one bucket instead of your whole account.
+## 2. Create a bucket-scoped key
 
 ```bash
 linode-cli object-storage keys-create \
@@ -131,183 +28,70 @@ linode-cli object-storage keys-create \
   --text --format id,access_key,secret_key
 ```
 
-`--bucket_access` lists the buckets the key may touch: one bucket in `us-sea`, with `read_write` permission. `--text` prints plain columns, so a narrow terminal cannot cut off the secret. Paste this command instead of typing it; the backslashes and quotes are easy to get wrong.
+Save the returned values directly in `.env`. The secret is shown at creation; do not screen-share this output. The upload script needs write access. An application that only reads files can use a separate read-only key.
 
-```
-id	access_key	secret_key
-6635050	ABCDEFGHIJKLMNOPQRST	abcdefghijklmnopqrstuvwxyzABCDEFGHIJ0123
-```
-
-Copy all three values now. The secret key is shown once; afterwards Cloud Manager and the CLI show it as `[REDACTED]`. In Cloud Manager, open **Object Storage > Access Keys**: `hackmidwest-key` shows as limited to your bucket.
-
-## Step 4: Point the agent at the bucket
-
-The agent reaches the bucket through an S3 endpoint. Each region has one; ask for Seattle's:
+Find the endpoint:
 
 ```bash
-linode-cli object-storage endpoints --text --format region,endpoint_type,s3_endpoint | grep us-sea
+linode-cli object-storage endpoints --text --format region,endpoint_type,s3_endpoint
 ```
 
-```
-us-sea	E1	us-sea-1.linodeobjects.com
-```
-
-Open `.env` in your editor, for example `nano .env`, and fill in the knowledge block with your values:
+Use the endpoint for your bucket. The workshop configuration is:
 
 ```ini
 OBJ_ENDPOINT=https://us-sea-1.linodeobjects.com
-OBJ_BUCKET=hackmidwest-e02dabda
-OBJ_ACCESS_KEY=ABCDEFGHIJKLMNOPQRST
-OBJ_SECRET_KEY=abcdefghijklmnopqrstuvwxyzABCDEFGHIJ0123
-OBJ_KEY_ID=6635050
+OBJ_BUCKET=your-bucket-name
+OBJ_ACCESS_KEY=your-access-key
+OBJ_SECRET_KEY=your-secret-key
+OBJ_KEY_ID=your-key-id
 ```
 
-`OBJ_KEY_ID` is not used by the agent. It lets `scripts/down.sh` find and revoke this key later.
+`OBJ_KEY_ID` is for cleanup, not application requests. If the workshop endpoint is unavailable to your account, select an available endpoint in Cloud Manager and update your configuration and commands consistently.
 
-## Step 5: Ask a question the bucket cannot answer yet
-
-Ask about parking. The bucket is empty, so watch what happens:
+## 3. Upload and query
 
 ```bash
+python scripts/upload.py docs/sample/*.md
+linode-cli obj ls "$BUCKET" --cluster us-sea-1
 python -m agent --once "Where can I park?"
 ```
 
-```
-brain      live      hackathon-chat at https://ws.akamai-workshops.com/v1
-knowledge  live      bucket hackmidwest-e02dabda at us-sea-1.linodeobjects.com
-memory     fallback  kept in this process only, forgotten on restart. Set DATABASE_URL in .env.
-reflexes   off       no cache and no rate limit. Set VALKEY_URL to turn them on.
-  [tool] search_docs({"query": "parking options for attendees"})
-I don't have parking details in the team documents yet. I'd suggest checking the HackMidwest website or venue page for parking info.
-```
+Expect three files, a `search_docs` tool call, and an answer supported by `parking.md`. The sample files contain fictional event details. Check facts and source names rather than expecting identical model wording.
 
-The `knowledge` line says `live`: the agent found your bucket. It called `search_docs`, got nothing back, and said so. Without documents, the best a model can do is send you somewhere else, and a careless one invents an answer. Your answers will be worded differently each time; compare the tool calls and the facts, not the sentences.
+The upload script also indexes text. Without PostgreSQL, those vectors disappear when the script exits; the agent indexes the files in its own process when needed. Connect [PostgreSQL](02_memory.md) to retain vectors across restarts.
 
-## Step 6: Upload a document and ask again
+## 4. Use the bucket from your own app
 
-`scripts/upload.py` puts a file in the bucket and indexes it: it chunks the text, embeds the chunks, and stores the vectors in memory.
-
-```bash
-python scripts/upload.py docs/sample/parking.md
-```
-
-```
-Uploaded docs/sample/parking.md to hackmidwest-e02dabda/parking.md and indexed 1 chunk(s).
-No database, so these vectors were not kept. The running agent indexes new files on its next question.
-```
-
-The file is in your bucket now:
-
-```bash
-linode-cli obj ls $BUCKET --cluster us-sea-1
-```
-
-```
-2026-10-02 01:15  1260  parking.md
-```
-
-Ask again. The four status lines are the same as in step 5, so they are left out here:
-
-```bash
-python -m agent --once "Where can I park?"
-```
-
-```
-  [tool] search_docs({"query": "parking options for attendees"})
-Park in Lot C, the gravel lot on the north side of the building next to the loading dock. It's free all weekend if you're wearing a hackathon badge, and it stays open overnight.
-
-Lot A in front of the main entrance is reserved for sponsors and judges, and cars without a sponsor pass get towed after 10 PM.
-
-Street parking on Example Avenue is free after 6 PM Friday and all day Saturday and Sunday.
-
-This is from parking.md.
-```
-
-Same question, same model. The difference is one file in your bucket. Upload the other two sample files so the agent knows the schedule and the rules:
-
-```bash
-python scripts/upload.py docs/sample/schedule.md docs/sample/rules.md
-```
-
-## Step 7: Read the code you just used
-
-Open `agent/knowledge.py`. This is the part that turns a bucket into answers:
+This connection uses the same environment variables as the starter. Run it from the workshop directory after filling in `.env`:
 
 ```python
-class Knowledge:
-    def sync(self) -> int:
-        """Index files that are new or changed, forget files that are gone. Returns chunks written."""
-        files = self.source.files()
-        indexed = self.memory.document_keys()
-        written = 0
-        for key, version in files.items():
-            if key not in indexed or self.versions.get(key, version) != version:
-                written += self.index(key)
-            self.versions[key] = version
-        for key in indexed - files.keys():
-            self.memory.delete_document(key)
-        return written
+import os
+import boto3
+from dotenv import load_dotenv
 
-    def index(self, key: str) -> int:
-        """Read one file, chunk it, embed the chunks, and store them. Returns the chunk count."""
-        try:
-            chunks = chunk(self.source.read(key))
-        except Exception as error:  # one file it cannot read, such as a broken PDF, must not stop the others
-            self.unreadable[key] = reason(error)
-            self.memory.delete_document(key)  # chunks of an older version no longer match the bucket
-            return 0
-        self.unreadable.pop(key, None)
-        vectors = self.embed([f"{key}\n{text}" for text in chunks])  # the file name helps the match
-        self.memory.replace_document(key, chunks, vectors)
-        return len(chunks)
-
-    def search(self, query: str, k: int = 3) -> list[Hit]:
-        self.sync()  # one list request, so files uploaded a moment ago are searchable
-        return self.memory.search(self.embed.one(query), k)
+load_dotenv(".env", override=True)
+s3 = boto3.client(
+    "s3",
+    endpoint_url=os.environ["OBJ_ENDPOINT"],
+    aws_access_key_id=os.environ["OBJ_ACCESS_KEY"],
+    aws_secret_access_key=os.environ["OBJ_SECRET_KEY"],
+)
+bucket = os.environ["OBJ_BUCKET"]
+s3.upload_file("docs/sample/parking.md", bucket, "parking.md")
+text = s3.get_object(Bucket=bucket, Key="parking.md")["Body"].read().decode("utf-8")
+print(text)
 ```
 
-`sync()` lists the bucket and compares each file's ETag, which changes when the file does, with what it indexed before. New and changed files get indexed. Deleted files are forgotten. `search()` calls `sync()` first, which is why the running agent picks up files you upload while it runs. `index()` stores the vectors through memory. Until guide 02 that memory is a Python list, so the agent re-indexes everything each time it starts. When a file cannot be read, `index()` skips it and keeps the reason. The other files stay searchable, and the `knowledge` status line names the file.
+For an image project, use `upload_file("generated.png", bucket, "generated.png")` after the [image notebook](../notebooks/03_image_generation.ipynb) produces that file. Keep the bucket private unless your application explicitly needs public access.
 
-To use your own data, change these:
+In the starter, [knowledge.py](../agent/knowledge.py) contains the bucket reader, text chunking, embedding calls, and search. `.md` and `.txt` files are supported. For PDF text extraction, see [the code guide](../agent/README.md#read-other-file-types).
 
-- `TEXT_FILES` at the top of the file lists the extensions the agent reads: `.md` and `.txt`. [agent/README.md](../agent/README.md#read-other-file-types) shows how to add PDFs.
-- The `search_docs` description in `agent/tools.py` and the first sentence of `SYSTEM_PROMPT` in `agent/brain.py` describe the sample documents. Rewrite both for yours, or the model may not search them. [Make it yours](../agent/README.md#make-it-yours) has a tested example. Do it after guide 03, which still checks its work with the sample files.
-- `CHUNK_WORDS` sets the chunk size. Smaller chunks give more precise matches and less context per match.
-- `Bucket` reads through boto3, the AWS SDK for Python. Any S3 code you find works against Akamai Object Storage with the endpoint URL from step 4.
+## Verify
 
-## Validation
-
-- `linode-cli obj ls $BUCKET --cluster us-sea-1` lists `parking.md`, `rules.md`, and `schedule.md`.
-- `python -m agent --once "When does judging start?"` calls `search_docs` and names `schedule.md`.
-- The startup line reads `knowledge  live  bucket hackmidwest-... at us-sea-1.linodeobjects.com`.
-
-**Show the judges:** Cloud Manager, **Object Storage > Buckets**, then your bucket and its files. From the terminal, `linode-cli obj ls hackmidwest-e02dabda --cluster us-sea-1` lists the files the agent answers from, and **Access Keys** shows the agent's key limited to that bucket.
+Show the bucket in Cloud Manager, then demonstrate an application reading the object or answering from it. A listed bucket alone does not demonstrate the integration.
 
 ## Clean up
 
-If you go on to guide 02, keep everything. The database is still building.
+Keep the bucket if you are continuing. Otherwise, review [cleanup](costs.md) and run `bash scripts/down.sh` to inspect and remove the workshop resources after confirmation. That script can also select other workshop resources in your account, so read its list before confirming. Object Storage service cancellation is a separate account-wide action.
 
-To delete what this guide created, read the names and ids back from `.env` and your account, then delete the bucket and every file in it, the agent's access key, and the database:
-
-```bash
-BUCKET=$(grep '^OBJ_BUCKET=' .env | cut -d= -f2)
-KEY_ID=$(grep '^OBJ_KEY_ID=' .env | cut -d= -f2)
-DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
-linode-cli obj rb $BUCKET --recursive --cluster us-sea-1
-linode-cli object-storage keys-delete $KEY_ID
-linode-cli databases postgresql-delete $DB_ID
-```
-
-Then empty the `OBJ_*` lines in `.env`. In Cloud Manager, check **Object Storage > Buckets**, **Object Storage > Access Keys**, and **Databases**.
-
-Left running, the database costs $0.024 an hour. Object Storage costs $5 a month for your account until you cancel it, even with no buckets; see [costs.md](costs.md).
-
-`scripts/down.sh` deletes everything the kit created after you confirm. `scripts/up.sh` runs steps 1 to 4 for you when you rebuild: these are the same commands you just typed, in one file.
-
-## Next steps
-
-When the database is active, go to [Guide 02: Memory in Managed PostgreSQL](02_memory.md). To check on it now:
-
-```bash
-linode-cli databases postgresql-list --label hackmidwest-db --format id,label,status
-```
+Next: [deploy on a Linode](03_body.md), [add PostgreSQL](02_memory.md), or [adapt the starter](../agent/README.md#make-it-yours).

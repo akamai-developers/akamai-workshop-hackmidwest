@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The knowledge and memory services: the same commands you type in guide 01, in one file,
-# for when you rebuild. Safe to run again: it skips anything that already exists.
+# Create or reuse the workshop bucket, access key, and optional PostgreSQL database.
+# See docs/01_knowledge.md and docs/02_memory.md for the individual service labs.
 #   bash scripts/up.sh           the database, the bucket, and the bucket's access key
 #   bash scripts/up.sh --no-db   the bucket and its access key only (the 30-minute path)
 set -euo pipefail
@@ -57,3 +57,4 @@ if [[ $with_db == yes ]]; then
   echo "Memory: database $DB_LABEL is $(linode-cli databases postgresql-view "$id" --text --no-headers --format status)."
   echo "It takes 10 to 15 minutes to become active. Run: bash scripts/status.sh"
 fi
+

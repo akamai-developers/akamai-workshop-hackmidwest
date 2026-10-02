@@ -1,36 +1,62 @@
-"""The guides quote real code. Every line of a quoted block must still exist in the file it comes from."""
+"""Check workshop navigation, notebook syntax, and the documented tool recipe."""
+import ast
+import json
 import re
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# guide -> code block language -> the files its blocks of that language quote
-QUOTED = {
-    "docs/01_knowledge.md": {"python": ["agent/knowledge.py"]},
-    "docs/02_memory.md": {"python": ["agent/memory.py"], "sql": ["agent/sql/001_init.sql"]},
-    "docs/03_body.md": {"python": ["agent/server.py"], "yaml": ["deploy/cloud-init.yaml", "compose.yaml"]},
-    "docs/04_lke.md": {"yaml": ["k8s/agent.yaml"]},
-    "docs/05_valkey.md": {"python": ["agent/cache.py"]},
-}
+
+def markdown_sources():
+    for path in sorted(ROOT.rglob("*.md")):
+        if not any(part.startswith(".") for part in path.relative_to(ROOT).parts):
+            yield path, path.read_text()
+    for path in sorted((ROOT / "notebooks").glob("*.ipynb")):
+        notebook = json.loads(path.read_text())
+        yield path, "\n".join("".join(cell["source"]) for cell in notebook["cells"]
+                              if cell["cell_type"] == "markdown")
 
 
-def quoted_blocks():
-    for guide, languages in QUOTED.items():
-        text = (ROOT / guide).read_text()
-        for number, (language, block) in enumerate(re.findall(r"```(\w+)\n(.*?)```", text, re.S), start=1):
-            if language in languages:
-                yield pytest.param(block, languages[language], id=f"{guide}-block{number}")
+def heading_ids(text):
+    text = re.sub(r"```.*?```", "", text, flags=re.S)
+    counts, result = {}, set()
+    for title in re.findall(r"^#+ (.+)$", text, flags=re.M):
+        slug = re.sub(r"[^\w -]", "", title.lower()).replace(" ", "-")
+        count = counts.get(slug, 0)
+        counts[slug] = count + 1
+        result.add(f"{slug}-{count}" if count else slug)
+    return result
 
 
-@pytest.mark.parametrize("block, sources", list(quoted_blocks()))
-def test_quoted_code_matches_the_source(block, sources):
-    lines = set()
-    for source in sources:
-        lines |= {line.strip() for line in (ROOT / source).read_text().splitlines()}
-    missing = [line for line in block.splitlines() if line.strip() and line.strip() not in lines]
-    assert not missing, f"these quoted lines are not in {', '.join(sources)}: {missing}"
+@pytest.mark.parametrize("path,text", list(markdown_sources()),
+                         ids=lambda value: str(value.relative_to(ROOT)) if isinstance(value, Path) else None)
+def test_internal_links(path, text):
+    text = re.sub(r"```.*?```", "", text, flags=re.S)
+    for link in re.findall(r"\]\(([^)]+)\)", text):
+        parsed = urlsplit(link)
+        if parsed.scheme or parsed.netloc:
+            continue
+        target = (path.parent / unquote(parsed.path)).resolve() if parsed.path else path
+        assert target.exists(), f"{path.relative_to(ROOT)} -> {link}"
+        if parsed.fragment and target.suffix == ".md":
+            assert unquote(parsed.fragment) in heading_ids(target.read_text()), f"Missing heading: {link}"
+
+
+@pytest.mark.parametrize("path", sorted((ROOT / "notebooks").glob("*.ipynb")), ids=lambda p: p.name)
+def test_notebook_code_and_clean_outputs(path):
+    notebook = json.loads(path.read_text())
+    assert notebook["nbformat"] == 4
+    for index, cell in enumerate(notebook["cells"]):
+        if cell["cell_type"] != "code":
+            continue
+        source = "".join(cell["source"])
+        source = "\n".join(line for line in source.splitlines() if not line.startswith("%pip "))
+        ast.parse(source, filename=f"{path.name}:cell-{index}")
+        assert cell["execution_count"] is None
+        assert cell["outputs"] == []
 
 
 def test_the_add_a_tool_recipe_works_as_written():
@@ -48,3 +74,4 @@ def test_the_add_a_tool_recipe_works_as_written():
     tools = namespace["Tools"]()
     assert "find_table" in [schema["function"]["name"] for schema in tools.schemas()]
     assert tools.run("find_table", '{"team": "Byte Club"}', "s1") == "Table 12"
+

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The optional body on Kubernetes: the same commands as guide 04, in one file, for when you rebuild.
+# Deploy the starter on LKE. See docs/04_lke.md for the Kubernetes lab.
 # Creates a one-node LKE cluster in Seattle, loads your code and .env into the cluster, lets the node
 # into the database, starts the agent and Valkey, names the NodeBalancer the cluster makes for them,
 # and waits until http://<nodebalancer>/health answers. Safe to run again: it reuses what exists and rolls out changes.
@@ -100,3 +100,4 @@ healthy | python -m json.tool
 echo
 echo "The agent is up on LKE after $(elapsed): http://$nb_ip"
 echo "Use kubectl with: export KUBECONFIG=$REPO/$KUBECONFIG_FILE"
+

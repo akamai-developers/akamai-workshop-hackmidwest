@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# The safety net: deletes what this kit created, so nothing keeps billing after the event.
+# Review and delete resources matching the workshop labels and saved settings.
 # It looks up each kit resource by its exact hackmidwest- name, and the NodeBalancer behind the
 # LKE agent Service by its address, shows what it found, and asks you to type yes. Then it deletes
 # them and empties the OBJ_* and DATABASE_URL lines in .env.
-# It never lists or touches anything else on your account.
+# Review the displayed IDs: matching labels do not establish resource ownership.
 #   bash scripts/down.sh          asks before deleting
 #   bash scripts/down.sh --yes    deletes without asking
 set -uo pipefail  # no -e: one failed delete should not stop the others
@@ -91,8 +91,9 @@ if [[ -f $KUBECONFIG_FILE && -z $(lookup lke clusters-list "$LKE_LABEL") ]]; the
 fi
 echo
 echo "Object Storage itself still bills \$5 a month until you cancel it. Cancelling deletes every bucket"
-echo "on the account, so do it yourself when you are sure: Cloud Manager, Object Storage, Cancel Object Storage."
+echo "on the account, so do it yourself when you are sure: Cloud Manager, Administration, Account Settings, Object Storage."
 if [[ $bucket_state == unknown ]]; then
   echo "The bucket $bucket was not checked. See the error above, then run this script again."
   exit 1
 fi
+

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HackMidwest starter agent</title>
+  <title>Hack Midwest document assistant</title>
   <link rel="icon" href="data:,">
   <style>
     body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #f5f6f8; color: #1d2330; }
@@ -28,11 +28,12 @@
 </head>
 <body>
 <main>
-  <h1>HackMidwest starter agent</h1>
+  <h1>Hack Midwest document assistant</h1>
+  <p>This demo uses fictional event documents. Saved notes are shared across conversations.</p>
   <div id="roles">Loading status...</div>
   <div id="log"></div>
   <form id="form">
-    <input id="message" autocomplete="off" placeholder="Ask about the venue, or tell me something to remember" required>
+    <input id="message" autocomplete="off" placeholder="Ask about the sample documents" required>
     <button id="send">Send</button>
   </form>
   <button id="new" type="button">Start a new conversation</button>
@@ -74,7 +75,8 @@
       box.textContent = "";
       for (const [role, info] of Object.entries(health)) {
         if (role === "status") continue;
-        const cells = [role, info.state, info.detail];
+        const labels = { brain: "Inference", knowledge: "Documents", memory: "Data store", reflexes: "Cache" };
+        const cells = [labels[role] || role, info.state, info.detail];
         cells.forEach((text, i) => {
           const cell = document.createElement("span");
           cell.textContent = text;
@@ -122,3 +124,4 @@
 </script>
 </body>
 </html>
+
