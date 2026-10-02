@@ -4,22 +4,33 @@ The agent is a few hundred lines of Python with no agent framework. Each file ma
 
 ```
 agent/
-  __main__.py   python -m agent: the terminal chat
-  config.py     reads .env and says which roles are live
-  brain.py      the system prompt and the tool loop
-  tools.py      the functions the model can call
-  memory.py     conversation history
+  __main__.py       python -m agent: the terminal chat
+  server.py         the web front: the chat page, POST /chat, GET /health
+  config.py         reads .env
+  brain.py          the system prompt, the tool loop, and build(), which wires the rest
+  tools.py          the functions the model can call
+  knowledge.py      documents from the Object Storage bucket, chunked and embedded
+  memory.py         history, document vectors, and notes, in PostgreSQL with pgvector
+  cache.py          Valkey: the embedding cache and the per-session rate limit
+  sql/001_init.sql  the tables, created by scripts/db_init.py
+  static/index.html the chat page
 ```
 
 ## The modules
 
-**`config.py`** reads `.env` into a `Config` object. Only `OPENAI_BASE_URL` and `OPENAI_API_KEY` are required; without them the agent refuses to start and tells you which one is missing. Values in `.env` win over your shell, the same as in the notebooks, so an OpenAI key in your shell cannot break the brain. `status()` builds the lines the agent prints at startup: one per role, `live`, `fallback`, or `off`, with host names but never passwords or keys.
+**`config.py`** reads `.env` into a `Config` object. Only `OPENAI_BASE_URL` and `OPENAI_API_KEY` are required; without them the agent refuses to start and tells you which one is missing. Values in `.env` win over your shell, the same as in the notebooks, so an OpenAI key in your shell cannot break the brain. `host_of()` turns a URL into its host and port, which is how status lines show where a service is without printing its password.
 
-**`brain.py`** holds the system prompt and the tool loop. `Brain.chat()` loads the session's history from memory, adds your message, and calls `run()`. `run()` calls the model, runs every tool it asks for, sends the results back, and repeats until the model answers in prose, at most 5 model calls per message. Each call streams, so the terminal shows the answer as it arrives. `_complete()` rebuilds the tool calls from the streamed chunks: the endpoint sends each call's id and name once, then its arguments in pieces. `build()` connects every service `.env` turns on and hands them to the brain.
+**`brain.py`** holds the system prompt and the tool loop. `Brain.chat()` checks the rate limit, loads the session's history from memory, adds your message, and calls `run()`. `run()` calls the model, runs every tool it asks for, sends the results back, and repeats until the model answers in prose, at most 5 model calls per message. Each call streams, so the terminal shows the answer as it arrives. `_complete()` rebuilds the tool calls from the streamed chunks: the endpoint sends each call's id and name once, then its arguments in pieces. `build()` connects every service `.env` turns on and hands them to the brain. `status()` prints one line per role: `live`, `fallback`, `off`, or `error`.
 
-**`tools.py`** lists the tools in `SCHEMAS` and runs them in `Tools.run()`. A tool is a plain function that returns a short string. If a tool fails, the error goes back to the model as text, so it can try again or explain. The model never runs anything itself; it can only ask.
+**`tools.py`** lists the tools in `SCHEMAS` and runs them in `Tools.run()`. A tool is a plain function that returns a short string. If a tool fails, the error goes back to the model as text, so it can try again or explain. There are four: `current_time`, `search_docs` (knowledge), and `remember` and `recall` (memory).
 
-**`memory.py`** keeps each session's messages. Without a database it uses `LocalMemory`, a dictionary of lists that is gone when the process exits. The brain sends the last 20 messages back to the model each turn, so long chats still fit the 32,768-token context window.
+**`knowledge.py`** reads documents from the bucket with boto3, the AWS SDK for Python, which works against Akamai Object Storage when you give it the endpoint URL. `chunk()` cuts text into pieces of about 500 words, keeping paragraphs together. `Embedder` turns text into 1,024-number vectors, at most 16 texts and about 5,000 words per request, the endpoint's limits. `Knowledge.sync()` indexes files that are new or changed since it last looked and forgets deleted ones; `search()` syncs, then asks memory for the closest chunks. Without `OBJ_*` settings it reads `docs/sample/` instead.
+
+**`memory.py`** stores three things: each session's messages, the document chunks with their vectors, and the notes the `remember` tool saves. `PostgresMemory` keeps them in Managed PostgreSQL, where the `vector` column from pgvector and its `<=>` cosine distance operator do the search in SQL. Notes are rows in the documents table whose key starts with `notes/`, so `recall` is the same search with a different filter. Without `DATABASE_URL`, `LocalMemory` keeps the same things in Python lists until the process exits. If the database is set but unreachable, the agent says why and uses the fallback instead of crashing. The brain sends the last 20 messages back to the model each turn, so long chats fit the 32,768-token context window.
+
+**`cache.py`** is the reflexes. With `VALKEY_URL` set, it caches the vector for each question text for a day and allows each session 20 messages a minute. Without it, both are off and nothing else changes.
+
+**`server.py`** is the web front. It builds the brain once at startup, then serves the chat page at `/`, `POST /chat` with `{"session_id": "...", "message": "..."}`, and `GET /health`, which lists every role and its state. A rate-limited session gets HTTP 429, and a failed model call gets 502.
 
 **`__main__.py`** is the terminal front end. Status lines and tool calls go to stderr, and the answer goes to stdout, so `python -m agent --once "..." > answer.txt` captures only the answer. `--session` picks the conversation; the default is `terminal`.
 

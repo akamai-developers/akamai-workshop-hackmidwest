@@ -2,6 +2,65 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-10-02
+
+Phase 4: the body on a Linode.
+
+### Added
+
+- `agent/server.py`: FastAPI with the chat page at `/`, `POST /chat` (`{session_id, message}` to `{reply, tools_used}`), and `GET /health`, which lists every role and what it is connected to. Rate-limited sessions get 429; a failed model call gets 502.
+- `agent/static/index.html`: a plain chat page, no framework. It shows the four roles from `/health` and keeps one session id per browser.
+- `agent/cache.py`: Valkey as the reflexes, with an embedding cache (one day) and a limit of 20 messages a minute per session.
+- `Dockerfile`, `compose.yaml` (the agent on port 8000 and Valkey with no published port), `.dockerignore`, and `deploy/cloud-init.yaml` (installs Docker on first boot, holds no secrets).
+- `scripts/deploy_linode.sh`: Cloud Firewall, Linode, cloud-init, the database allow list, code and `.env` over SSH, `docker compose up`, and a wait for `/health`. Measured: 3 minutes 9 seconds from start to the first 200.
+- `scripts/down.sh`: finds each `hackmidwest-*` resource by its exact name, asks, deletes, and empties `OBJ_*` and `DATABASE_URL` in `.env`. Measured: 13 seconds for five resources.
+- `docs/03_body.md` and `docs/05_valkey.md`.
+- `tests/test_server.py`: the routes with a fake brain, and the Valkey reflexes with a fake redis.
+
+### Verified on Akamai Cloud
+
+- The deployed agent answered from the bucket, recalled a fact saved from a laptop, and kept its memory across `docker compose restart`.
+- The firewall admitted ports 22 and 8000 and blocked 80, 5432, and 6379.
+- 21 quick messages from one session got twenty 200 responses and one 429.
+
+## [0.3.0] - 2026-10-02
+
+Phase 3: memory in Managed PostgreSQL with pgvector.
+
+### Added
+
+- `agent/memory.py`: `PostgresMemory` for sessions, messages, document vectors, and notes, with pgvector cosine search in SQL, a reconnect after dropped connections, and TCP keepalives. Without `DATABASE_URL`, or when the database cannot be reached, the agent says why and uses `LocalMemory`.
+- The `remember` and `recall` tools. Notes are rows in the documents table under `notes/`, shared by every conversation.
+- `agent/sql/001_init.sql`, `scripts/db_init.py` (prints the PostgreSQL and pgvector versions), and the database half of `scripts/up.sh`.
+- `scripts/status.sh`: waits for the database and for its host name in DNS, then writes `DATABASE_URL` with `sslmode=require`.
+- `docs/02_memory.md` and `tests/test_memory.py`.
+
+### Verified on Akamai Cloud
+
+- `CREATE EXTENSION vector` works for `akmadmin` on Managed PostgreSQL 17.11: pgvector 0.8.6, with vectorscale 0.9.0 available.
+- A `g6-nanode-1` database turned active 6 minutes 16 seconds after it was created. Its host name resolved about 2 minutes later.
+- A fact saved in one process came back in another session in a new process. With `DATABASE_URL` removed, it was gone.
+
+### Changed
+
+- The system prompt asks for plain text, tells the model to check `recall` for questions about the team, and forbids describing documents that `search_docs` did not return. Temperature is 0.3. In testing, the model skipped `search_docs` and invented parking rules once in about 20 runs before this change and in none of 10 after.
+
+## [0.2.0] - 2026-10-02
+
+Phase 2: knowledge in Object Storage.
+
+### Added
+
+- `agent/knowledge.py`: lists the bucket with boto3, chunks text into about 500 words, embeds in requests of at most 16 inputs and about 5,000 words, and searches by cosine similarity. It indexes new and changed files on each search and forgets deleted ones. Without `OBJ_*` it reads `docs/sample/`.
+- The `search_docs` tool, and three sample documents about a made-up venue in `docs/sample/`.
+- `scripts/up.sh` (database, bucket, and a bucket-limited access key; `--no-db` skips the database), `scripts/upload.py`, and `scripts/lib.sh` for the shared settings.
+- `docs/01_knowledge.md` and `tests/test_knowledge.py`.
+
+### Verified on Akamai Cloud
+
+- With an empty bucket the agent said it had no parking details. After `scripts/upload.py docs/sample/parking.md` it answered from `parking.md`.
+- The access key was created limited to one bucket with `read_write`, and a repeat run of `scripts/up.sh` changed nothing.
+
 ## [0.1.0] - 2026-10-02
 
 Phase 1: foundation and the brain.

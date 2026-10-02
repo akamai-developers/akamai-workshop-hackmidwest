@@ -1,0 +1,8 @@
+# Keep secrets and bulky folders out of the image. The Dockerfile only copies agent/ and docs/sample/.
+.env
+.venv
+.git
+build-logs
+notebooks
+tests
+**/__pycache__

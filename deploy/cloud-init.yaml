@@ -1,0 +1,11 @@
+#cloud-config
+# Runs once, on the Linode's first boot: installs Docker and makes the folder the agent runs from.
+# No secrets in here. Anyone on the Linode can read user data, so .env is copied over SSH instead.
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+ssh_pwauth: false
+runcmd:
+  - systemctl enable --now docker
+  - mkdir -p /opt/hackmidwest

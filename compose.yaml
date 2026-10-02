@@ -1,0 +1,18 @@
+# The body: the agent and Valkey, side by side on one machine.
+#   docker compose up -d --build    start both, rebuilding the agent from this folder
+#   docker compose logs -f agent    watch the agent's status lines and requests
+services:
+  agent:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      VALKEY_URL: redis://valkey:6379/0  # the valkey service below; this wins over .env
+    depends_on:
+      - valkey
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8  # no ports line, so only the agent can reach it
+    restart: unless-stopped

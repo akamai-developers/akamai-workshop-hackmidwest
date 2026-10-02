@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HackMidwest starter agent</title>
+  <link rel="icon" href="data:,">
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #f5f6f8; color: #1d2330; }
+    main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 22px; margin: 0 0 12px; }
+    #roles { display: grid; grid-template-columns: max-content max-content 1fr; gap: 4px 12px;
+             background: #fff; border: 1px solid #dde1e8; border-radius: 8px; padding: 12px; font-size: 14px; }
+    .state { font-weight: 600; }
+    .live { color: #12803a; } .fallback { color: #a15c00; } .off { color: #6b7280; } .error { color: #c62828; }
+    #log { margin: 16px 0; display: flex; flex-direction: column; gap: 10px; }
+    .msg { padding: 10px 14px; border-radius: 10px; white-space: pre-wrap; max-width: 85%; }
+    .you { align-self: flex-end; background: #0b5cad; color: #fff; }
+    .agent { align-self: flex-start; background: #fff; border: 1px solid #dde1e8; }
+    .note { align-self: center; color: #6b7280; font-size: 14px; }
+    .tools { display: block; margin-top: 6px; font-size: 13px; color: #6b7280; }
+    form { display: flex; gap: 8px; }
+    input { flex: 1; font: inherit; padding: 10px 12px; border: 1px solid #c4cad4; border-radius: 8px; }
+    button { font: inherit; padding: 10px 16px; border: 0; border-radius: 8px; background: #0b5cad; color: #fff; cursor: pointer; }
+    button:disabled { background: #8aa9cc; cursor: wait; }
+    #new { background: none; color: #0b5cad; padding: 0; margin-top: 8px; font-size: 14px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>HackMidwest starter agent</h1>
+  <div id="roles">Loading status...</div>
+  <div id="log"></div>
+  <form id="form">
+    <input id="message" autocomplete="off" placeholder="Ask about the venue, or tell me something to remember" required>
+    <button id="send">Send</button>
+  </form>
+  <button id="new" type="button">Start a new conversation</button>
+</main>
+<script>
+  const log = document.getElementById("log");
+  const form = document.getElementById("form");
+  const input = document.getElementById("message");
+  const send = document.getElementById("send");
+
+  // One id per browser, kept across reloads, so the agent can find this conversation in memory.
+  // crypto.randomUUID only exists on https pages, so build the id from random bytes instead.
+  function newSession() {
+    const bytes = crypto.getRandomValues(new Uint8Array(8));
+    const id = "web-" + Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+    localStorage.setItem("session_id", id);
+    return id;
+  }
+  let session = localStorage.getItem("session_id") || newSession();
+
+  function add(kind, text, tools) {
+    const div = document.createElement("div");
+    div.className = "msg " + kind;
+    div.textContent = text;  // textContent, never innerHTML: the reply is model output
+    if (tools && tools.length) {
+      const span = document.createElement("span");
+      span.className = "tools";
+      span.textContent = "tools used: " + tools.join(", ");
+      div.appendChild(span);
+    }
+    log.appendChild(div);
+    div.scrollIntoView({ block: "end" });
+  }
+
+  async function showRoles() {
+    const box = document.getElementById("roles");
+    try {
+      const health = await (await fetch("/health")).json();
+      box.textContent = "";
+      for (const [role, info] of Object.entries(health)) {
+        if (role === "status") continue;
+        const cells = [role, info.state, info.detail];
+        cells.forEach((text, i) => {
+          const cell = document.createElement("span");
+          cell.textContent = text;
+          if (i === 1) cell.className = "state " + info.state;
+          box.appendChild(cell);
+        });
+      }
+    } catch (err) {
+      box.textContent = "Could not load /health: " + err;
+    }
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const message = input.value.trim();
+    if (!message) return;
+    add("you", message);
+    input.value = "";
+    send.disabled = true;
+    try {
+      const response = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: session, message }),
+      });
+      const data = await response.json();
+      if (response.ok) add("agent", data.reply, data.tools_used);
+      else add("note", "Error " + response.status + ": " + (data.detail || JSON.stringify(data)));
+    } catch (err) {
+      add("note", "Could not reach the agent: " + err);
+    }
+    send.disabled = false;
+    input.focus();
+  });
+
+  document.getElementById("new").addEventListener("click", () => {
+    session = newSession();
+    log.textContent = "";
+    add("note", "New conversation. Saved facts and documents are still there.");
+  });
+
+  showRoles();
+  input.focus();
+</script>
+</body>
+</html>

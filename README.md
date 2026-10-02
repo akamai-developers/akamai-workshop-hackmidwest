@@ -22,11 +22,17 @@ A small AI agent that runs on your own Akamai Cloud account. You build it in 45 
 
 | Path | Time | What you do |
 |---|---|---|
-| **Guided** | 45 minutes | Do the [pre-work](docs/00_prework.md) the night before. On the day, follow guides 01, 02, and 03. You type each `linode-cli` command yourself and watch each resource appear in Cloud Manager. You finish with the agent on your Linode, using every service in the picture. |
-| **Fast** | 30 minutes | Do the pre-work, then run three scripts that replay the guides' commands: Object Storage, a Linode, and a Cloud Firewall, without the managed database. Add the database later with guide 02. |
-| **Self-serve** | 15 minutes each | Optional modules: Kubernetes on LKE, Valkey for caching and rate limits, and the five [inference notebooks](#brain-the-inference-notebooks). |
+| **Guided** | 45 minutes | Do the [pre-work](docs/00_prework.md) the night before. On the day, follow guides [01](docs/01_knowledge.md), [02](docs/02_memory.md), and [03](docs/03_body.md). You type each `linode-cli` command yourself and watch each resource appear in Cloud Manager. You finish with the agent on your Linode, using every service in the picture. |
+| **Fast** | 30 minutes | Do the pre-work, then run three scripts that replay the guides' commands: Object Storage, a Linode, and a Cloud Firewall, without the managed database. Add the database later: guide 01, step 1, then guide 02. |
+| **Self-serve** | 15 minutes each | Optional modules: [Valkey reflexes](docs/05_valkey.md), Kubernetes on LKE (coming next), and the five [inference notebooks](#brain-the-inference-notebooks). |
 
-> NOTE: This kit is being built in phases. Today it contains the pre-work and the brain: the agent runs in your terminal against the inference endpoint. The guides for Object Storage, PostgreSQL, the Linode, and the optional modules land next. [CHANGELOG.md](CHANGELOG.md) tracks what is ready.
+The fast path, from the repository folder with the virtual environment active:
+
+```bash
+bash scripts/up.sh --no-db                     # bucket and its access key, written to .env
+python scripts/upload.py docs/sample/*.md      # the sample documents, into the bucket
+bash scripts/deploy_linode.sh                  # firewall, Linode, Docker, the agent; prints its URL
+```
 
 ## Quick start
 
@@ -49,31 +55,39 @@ The Akamai challenge asks one question: does your project integrate Akamai Cloud
 
 | Akamai service | Role | What the agent does with it | Show the judges |
 |---|---|---|---|
-| Inference endpoint on Akamai Cloud GPUs | brain | Chat, tool calls, and embeddings | The `brain live` line when the agent starts |
-| Object Storage | knowledge | Reads your documents from a bucket | Cloud Manager, **Object Storage > Buckets** |
-| Managed PostgreSQL with pgvector | memory | Keeps conversations and searches document vectors | Cloud Manager, **Databases** |
-| Linode | body | Runs the agent in Docker on a public IP | Cloud Manager, **Linodes**, and the agent's page at `http://<ip>:8000` |
+| Inference endpoint on Akamai Cloud GPUs | brain | Chat, tool calls, and embeddings | The `brain live` line at `/health` |
+| Object Storage | knowledge | Reads your documents from a bucket | Cloud Manager, **Object Storage > Buckets**, or `linode-cli obj ls <bucket> --cluster us-sea-1` |
+| Managed PostgreSQL with pgvector | memory | Keeps conversations, saved facts, and document vectors | Cloud Manager, **Databases**, or `linode-cli databases postgresql-list --label hackmidwest-db` |
+| Linode | body | Runs the agent and Valkey in Docker on a public address | Cloud Manager, **Linodes**, and the chat page at `http://<ip>:8000` |
 | Cloud Firewall | body | Lets in only SSH and the agent's port | Cloud Manager, **Firewalls** |
 | LKE and a NodeBalancer (optional) | body | Runs the agent on Kubernetes behind a load balancer | Cloud Manager, **Kubernetes** and **NodeBalancers** |
+
+The fastest proof is the agent itself: `http://<your Linode address>:8000/health` names the bucket, the database, and the Valkey it is using right now.
 
 ## Labs
 
 | # | Guide | Adds | Minutes |
 |---|---|---|---|
 | 0 | [Pre-work: account, token, and tools](docs/00_prework.md) | Account with credit, `linode-cli`, `.env` | 15, the night before |
-| 1 | Knowledge in Object Storage | A bucket, an access key, and documents the agent can search. Starts the database. | 15 |
-| 2 | Memory in Managed PostgreSQL | pgvector, and conversations that survive a restart | 10 |
-| 3 | The body on a Linode | A Linode, a Cloud Firewall, Docker, and Valkey | 20 |
-| 4 | Kubernetes on LKE (optional) | An LKE cluster and a NodeBalancer | 15 |
-| 5 | Valkey reflexes (optional) | An embedding cache and a per-session rate limit | 15 |
+| 1 | [Knowledge in Object Storage](docs/01_knowledge.md) | A bucket, an access key, and documents the agent can search. Starts the database. | 15 |
+| 2 | [Memory in Managed PostgreSQL](docs/02_memory.md) | pgvector, and conversations and facts that survive a restart | 10 |
+| 3 | [The body on a Linode](docs/03_body.md) | A Linode, a Cloud Firewall, Docker, and Valkey | 20 |
+| 4 | Kubernetes on LKE (optional, coming next) | An LKE cluster and a NodeBalancer | 15 |
+| 5 | [Valkey reflexes (optional)](docs/05_valkey.md) | An embedding cache and a per-session rate limit | 15 |
 
-Every link the guides rely on is collected in [docs/links.md](docs/links.md).
+Measured on 2026-10-02: the database was active 6 minutes after it was created, and `scripts/deploy_linode.sh` had the agent answering on its Linode 3 minutes 9 seconds after it started. [agent/README.md](agent/README.md) explains the code, and every link the guides rely on is in [docs/links.md](docs/links.md).
 
 ## Cost and teardown
 
 The guided stack costs about $0.05 an hour, or $1.19 a day, which the $300 credit covers many times over. [docs/costs.md](docs/costs.md) lists the price of every resource, read from the API with `linode-cli`.
 
-Akamai bills a resource until you delete it, even when it is powered off. Each guide ends with the delete commands for what it created.
+Akamai bills a resource until you delete it, even when it is powered off. Each guide ends with the delete commands for what it created. To delete everything the kit made in one go:
+
+```bash
+bash scripts/down.sh
+```
+
+It finds each `hackmidwest-*` resource by its exact name, shows the list, and deletes them when you type `yes`. It never touches anything else on your account. Object Storage itself keeps billing $5 a month until you cancel it in Cloud Manager, because cancelling deletes every bucket on the account.
 
 ## Brain: the inference notebooks
 
