@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Autonomous build runner
+build-logs/
+BUILD_PROGRESS.md
+PROMPT.md
+CLAUDE.md
+.claude/
+build.sh

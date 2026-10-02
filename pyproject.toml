@@ -1,0 +1,19 @@
+# Only here so `pip install -r requirements.txt` can install the agent package.
+# Dependencies live in requirements.txt and agent/requirements.txt.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hackmidwest-agent"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["agent"]
+
+[tool.setuptools.package-data]
+agent = ["static/*", "sql/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

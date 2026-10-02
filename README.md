@@ -1,10 +1,83 @@
-# HackMidwest inference workshop
+> [!IMPORTANT]
+> ### $300 in free credit for Akamai Cloud
+> Sign up with the HackMidwest link: **[http://login.linode.com/signup?promo=akm-dev-git-300-72326-P153](http://login.linode.com/signup?promo=akm-dev-git-300-72326-P153)**
+>
+> Do it the night before. The credit pays for everything in this kit, many times over.
 
-Three hands-on labs for the hackathon's AI endpoint. Each lab is a Jupyter notebook you run on your own laptop against the shared endpoint. No GPU, no cloud account, and no model downloads on your side.
+# Akamai Cloud agent starter kit for HackMidwest
 
-## What you are using
+A small AI agent that runs on your own Akamai Cloud account. You build it in 45 minutes, then replace its tools and documents with your idea.
 
-One HTTPS endpoint, compatible with the OpenAI API, running on Akamai Cloud GPUs:
+```
+  your laptop                         Akamai Cloud (us-sea, Seattle)
+  -----------------                   --------------------------------------------------------
+  linode-cli / python  ---creates-->  Linode "hackmidwest-agent" (body)
+                                        docker compose
+                                          agent (FastAPI, port 8000)  --tools-->  Object Storage bucket (knowledge)
+                                          valkey (reflexes)            --sql---->  Managed PostgreSQL + pgvector (memory)
+                                                                       --https-->  ws.akamai-workshops.com/v1 (brain)
+```
+
+## Three ways to use this kit
+
+| Path | Time | What you do |
+|---|---|---|
+| **Guided** | 45 minutes | Do the [pre-work](docs/00_prework.md) the night before. On the day, follow guides 01, 02, and 03. You type each `linode-cli` command yourself and watch each resource appear in Cloud Manager. You finish with the agent on your Linode, using every service in the picture. |
+| **Fast** | 30 minutes | Do the pre-work, then run three scripts that replay the guides' commands: Object Storage, a Linode, and a Cloud Firewall, without the managed database. Add the database later with guide 02. |
+| **Self-serve** | 15 minutes each | Optional modules: Kubernetes on LKE, Valkey for caching and rate limits, and the five [inference notebooks](#brain-the-inference-notebooks). |
+
+> NOTE: This kit is being built in phases. Today it contains the pre-work and the brain: the agent runs in your terminal against the inference endpoint. The guides for Object Storage, PostgreSQL, the Linode, and the optional modules land next. [CHANGELOG.md](CHANGELOG.md) tracks what is ready.
+
+## Quick start
+
+After the [pre-work](docs/00_prework.md), from the repository folder:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env                  # then paste your team key into .env
+python -m agent --once "Say hello"    # one answer, then exit
+python -m agent                       # chat in the terminal; type exit to quit
+```
+
+The agent prints one status line per role when it starts. Lines that say `fallback` or `off` are the Akamai services you have not connected yet.
+
+## The challenge checklist
+
+The Akamai challenge asks one question: does your project integrate Akamai Cloud services? The kit gives you these, and each one comes with a way to prove it.
+
+| Akamai service | Role | What the agent does with it | Show the judges |
+|---|---|---|---|
+| Inference endpoint on Akamai Cloud GPUs | brain | Chat, tool calls, and embeddings | The `brain live` line when the agent starts |
+| Object Storage | knowledge | Reads your documents from a bucket | Cloud Manager, **Object Storage > Buckets** |
+| Managed PostgreSQL with pgvector | memory | Keeps conversations and searches document vectors | Cloud Manager, **Databases** |
+| Linode | body | Runs the agent in Docker on a public IP | Cloud Manager, **Linodes**, and the agent's page at `http://<ip>:8000` |
+| Cloud Firewall | body | Lets in only SSH and the agent's port | Cloud Manager, **Firewalls** |
+| LKE and a NodeBalancer (optional) | body | Runs the agent on Kubernetes behind a load balancer | Cloud Manager, **Kubernetes** and **NodeBalancers** |
+
+## Labs
+
+| # | Guide | Adds | Minutes |
+|---|---|---|---|
+| 0 | [Pre-work: account, token, and tools](docs/00_prework.md) | Account with credit, `linode-cli`, `.env` | 15, the night before |
+| 1 | Knowledge in Object Storage | A bucket, an access key, and documents the agent can search. Starts the database. | 15 |
+| 2 | Memory in Managed PostgreSQL | pgvector, and conversations that survive a restart | 10 |
+| 3 | The body on a Linode | A Linode, a Cloud Firewall, Docker, and Valkey | 20 |
+| 4 | Kubernetes on LKE (optional) | An LKE cluster and a NodeBalancer | 15 |
+| 5 | Valkey reflexes (optional) | An embedding cache and a per-session rate limit | 15 |
+
+Every link the guides rely on is collected in [docs/links.md](docs/links.md).
+
+## Cost and teardown
+
+The guided stack costs about $0.05 an hour, or $1.19 a day, which the $300 credit covers many times over. [docs/costs.md](docs/costs.md) lists the price of every resource, read from the API with `linode-cli`.
+
+Akamai bills a resource until you delete it, even when it is powered off. Each guide ends with the delete commands for what it created.
+
+## Brain: the inference notebooks
+
+The brain is one HTTPS endpoint, compatible with the OpenAI API, running on Akamai Cloud GPUs. Five Jupyter notebooks teach it. They run on your laptop against the shared endpoint. No GPU, no cloud account, and no model downloads on your side.
 
 | Capability | Model alias | Backing model |
 |---|---|---|
@@ -14,21 +87,17 @@ One HTTPS endpoint, compatible with the OpenAI API, running on Akamai Cloud GPUs
 
 Because it speaks the OpenAI API, the official `openai` package and most frameworks (LangChain, LlamaIndex, Strands, and others) work by changing two settings: the base URL and the API key.
 
-## Before you begin
+| Lab | What you build | Time |
+|---|---|---|
+| [0. Quickstart](notebooks/00_quickstart.ipynb) | All three endpoints on one page: URL, body, fields, minimal code. Start here. | 10 min |
+| [1. Chat completions](notebooks/01_chat_completions.ipynb) | Streaming, conversations, output limits, long documents, thinking mode, quotas | 25 min |
+| [2. Embeddings and retrieval](notebooks/02_embeddings_and_retrieval.ipynb) | Semantic search over your own notes, then grounded answers from the chat model | 20 min |
+| [3. Image generation](notebooks/03_image_generation.ipynb) | Sizes, seeds, and handling the image quota | 15 min |
+| [4. Tools and structured output](notebooks/04_tools_and_structured_output.ipynb) | JSON-schema replies, function calling, the tool loop | 25 min |
 
-- Python 3.10 or newer
-- Your team's API key from the organizers. One key per team, shared by all members. Treat it like a password: keep it in a backend or a local `.env`, never in frontend code or a public repository.
-- About 10 minutes for the quickstart, about 90 minutes for all five notebooks
-
-## Setup
+Each notebook opens with "The call in one look": the endpoint, a field table, and the minimal call. With the virtual environment from the quick start active, open them with:
 
 ```bash
-git clone <this repository>
-cd akamai-workshop-hackmidwest
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env               # then paste your team key into .env
 jupyter notebook notebooks/
 ```
 
@@ -39,7 +108,9 @@ from openai import OpenAI
 client = OpenAI()  # reads OPENAI_BASE_URL and OPENAI_API_KEY from the environment
 ```
 
-## Quick reference
+Your team key is shared by every member and every script. Treat it like a password: keep it in a backend or in `.env`, never in frontend code or a public repository.
+
+### Quick reference
 
 Three operations. Every request carries `Authorization: Bearer <team key>` and `Content-Type: application/json`.
 
@@ -91,19 +162,7 @@ open("out.png", "wb").write(base64.b64decode(r.data[0].b64_json))
 
 Fields: `prompt` (required), `size` (`512x512`, `768x768`, `1024x1024`), `response_format` (`b64_json` only), `n` (always 1), `extra_body={"seed": 7}`.
 
-## Labs
-
-| Lab | What you build | Time |
-|---|---|---|
-| [0. Quickstart](notebooks/00_quickstart.ipynb) | All three endpoints on one page: URL, body, fields, minimal code. Start here. | 10 min |
-| [1. Chat completions](notebooks/01_chat_completions.ipynb) | Streaming, conversations, output limits, long documents, thinking mode, quotas | 25 min |
-| [2. Embeddings and retrieval](notebooks/02_embeddings_and_retrieval.ipynb) | Semantic search over your own notes, then grounded answers from the chat model | 20 min |
-| [3. Image generation](notebooks/03_image_generation.ipynb) | Sizes, seeds, and handling the image quota | 15 min |
-| [4. Tools and structured output](notebooks/04_tools_and_structured_output.ipynb) | JSON-schema replies, function calling, the tool loop | 25 min |
-
-Start with the quickstart. Each lab opens with "The call in one look": the endpoint, a field table, and the minimal call, before anything else.
-
-## Limits that apply to every team
+### Limits that apply to every team
 
 | Limit | Value |
 |---|---|
@@ -117,12 +176,12 @@ Start with the quickstart. Each lab opens with "The call in one look": the endpo
 
 Exceeding a limit returns `429 Too Many Requests` with an `x-ratelimit-reset` header. Back off and retry; never retry in a tight loop.
 
-## Troubleshooting
+### Troubleshooting
 
 | Symptom | Cause and fix |
 |---|---|
 | `401 invalid credentials` | Wrong or missing key. Check `.env`, and check the printed key in the setup cell starts with `hk_`. |
-| Key prints as `sk-...` | Your shell has an OpenAI key set. The notebooks override it; your own scripts should load `.env` with `override=True`. |
+| Key prints as `sk-...` | Your shell has an OpenAI key set. The notebooks and the agent override it from `.env`; your own scripts should load `.env` with `override=True`. |
 | `404` on `client.models.list()` | Only chat completions, embeddings, and image generation exist. Use the aliases above. |
 | `422` on embeddings | More than 16 inputs in one request. Batch them. |
 | `422` on images | Unsupported option. One square image, `b64_json` only. |
@@ -131,4 +190,4 @@ Exceeding a limit returns `429 Too Many Requests` with an `x-ratelimit-reset` he
 
 ## Getting help
 
-Organizers and mentors are in the venue and on the event Discord. Include the request ID from the response and the time when you report a problem; never paste your key.
+Organizers and mentors are in the venue and on the event Discord. Include the request ID from the response and the time when you report a problem; never paste your key or your Akamai token.
