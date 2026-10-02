@@ -4,17 +4,23 @@ from typing import Callable
 
 from openai import OpenAI
 
+from . import cache as cache_store
+from . import knowledge as knowledge_store
 from . import memory as memory_store
 from .config import Config
 from .tools import Tools
 
 SYSTEM_PROMPT = (
-    "You are the starter agent for a HackMidwest team. Answer in short, plain sentences. "
-    "Use your tools when they help. When a tool returns facts, answer from them and name the file "
-    "they came from. If the tools do not have the answer, say so instead of guessing."
+    "You are the starter agent for a HackMidwest team. Answer in short, plain sentences, as plain text "
+    "without Markdown. "
+    "Use your tools when they help. For questions about the user or their team, check recall for saved facts. "
+    "When a tool returns facts, answer from them and name the file they came from. "
+    "Never describe what the documents say unless search_docs returned it in this conversation. "
+    "If the tools do not have the answer, say so instead of guessing."
 )
 MAX_STEPS = 5  # model calls per message, so a confused model cannot loop forever
 MAX_TOKENS = 1024  # output tokens per model call; the endpoint allows up to 4,096
+TEMPERATURE = 0.3  # lower than the default, so tool use and answers stay consistent
 
 
 @dataclass
@@ -23,16 +29,38 @@ class Reply:
     tools_used: list[str] = field(default_factory=list)
 
 
+class RateLimited(Exception):
+    """This session sent more messages this minute than the reflexes allow."""
+
+
 class Brain:
-    def __init__(self, cfg: Config, tools: Tools, memory, client: OpenAI | None = None):
+    def __init__(self, cfg: Config, tools: Tools, memory, knowledge=None, cache=None,
+                 client: OpenAI | None = None):
         self.cfg = cfg
         self.tools = tools
         self.memory = memory
-        self.client = client or OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
+        self.knowledge = knowledge
+        self.cache = cache
+        self.client = client or OpenAI(base_url=cfg.base_url, api_key=cfg.api_key, max_retries=4)
+
+    def roles(self) -> list[tuple[str, str, str]]:
+        """(role, state, detail) for each part: live, fallback, off, or error. Never secrets."""
+        roles = [("brain", "live", f"{self.cfg.chat_model} at {self.cfg.base_url}")]
+        for role, part in (("knowledge", self.knowledge), ("memory", self.memory), ("reflexes", self.cache)):
+            if part is not None:
+                roles.append((role, part.state, part.detail))
+        return roles
+
+    def status(self) -> list[str]:
+        """The roles as the lines the agent prints at startup."""
+        return [f"{role:<10} {state:<9} {detail}" for role, state, detail in self.roles()]
 
     def chat(self, session_id: str, message: str, on_text: Callable | None = None,
              on_tool: Callable | None = None) -> Reply:
         """Answer one message in a session, then save both sides of the exchange to memory."""
+        if self.cache and not self.cache.allow(session_id):
+            raise RateLimited(f"This conversation sent {cache_store.RATE_LIMIT} messages in the last minute. "
+                              "Wait a moment and try again.")
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             *self.memory.history(session_id),
@@ -70,6 +98,7 @@ class Brain:
             messages=messages,
             tools=self.tools.schemas(),  # to forbid tools, leave this out; tool_choice "none" is unreliable here
             max_tokens=MAX_TOKENS,
+            temperature=TEMPERATURE,
             stream=True,
         )
         text, calls = [], {}
@@ -92,6 +121,9 @@ class Brain:
 
 def build(cfg: Config) -> Brain:
     """Connect every service that .env turns on and hand them to the brain."""
+    cache = cache_store.connect(cfg)
     memory = memory_store.connect(cfg)
-    tools = Tools(memory=memory)
-    return Brain(cfg, tools, memory)
+    embed = knowledge_store.Embedder(cfg, cache)
+    knowledge = knowledge_store.connect(cfg, memory, embed)
+    tools = Tools(knowledge=knowledge, memory=memory)
+    return Brain(cfg, tools, memory, knowledge, cache)

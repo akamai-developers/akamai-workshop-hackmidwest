@@ -5,7 +5,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from agent import config
-from agent.brain import MAX_STEPS, Brain
+from agent.brain import MAX_STEPS, Brain, RateLimited
 from agent.memory import LocalMemory
 from agent.tools import Tools
 
@@ -149,15 +149,30 @@ def test_config_refuses_to_start_without_the_brain(monkeypatch):
         config.load(env_file=None)
 
 
-def test_status_lines_never_print_secrets():
-    cfg = config.Config(
-        base_url="http://fake/v1", api_key="hk_secret",
-        obj_endpoint="https://us-sea-1.linodeobjects.com", obj_bucket="hackmidwest-abc",
-        obj_access_key="AKIA", obj_secret_key="s3cret",
-        database_url="postgresql://akmadmin:pa55word@db.example.com:12345/defaultdb?sslmode=require",
-    )
-    text = "\n".join(config.status(cfg))
-    assert "db.example.com:12345" in text
-    assert "us-sea-1.linodeobjects.com" in text
-    for secret in ("hk_secret", "s3cret", "pa55word", "AKIA"):
-        assert secret not in text
+def test_host_of_drops_user_names_and_passwords():
+    assert config.host_of("postgresql://akmadmin:pa55word@db.example.com:12345/defaultdb?sslmode=require") \
+        == "db.example.com:12345"
+    assert config.host_of("https://us-sea-1.linodeobjects.com") == "us-sea-1.linodeobjects.com"
+    assert config.host_of("us-sea-1.linodeobjects.com") == "us-sea-1.linodeobjects.com"
+    assert config.host_of("redis://valkey:6379/0") == "valkey:6379"
+
+
+def test_status_has_one_line_per_role():
+    memory = LocalMemory()
+    cache = NS(state="off", detail="no cache", allow=lambda session_id: True)
+    knowledge = NS(state="live", detail="bucket hackmidwest-abc at us-sea-1.linodeobjects.com")
+    brain = Brain(CFG, Tools(), memory, knowledge, cache, client=FakeClient())
+    lines = brain.status()
+    assert [line.split()[0] for line in lines] == ["brain", "knowledge", "memory", "reflexes"]
+    assert lines[1].split()[1] == "live" and lines[2].split()[1] == "fallback"
+    assert "hk_test" not in "\n".join(lines)
+
+
+def test_rate_limited_session_never_reaches_the_model():
+    memory = LocalMemory()
+    cache = NS(state="live", detail="valkey", allow=lambda session_id: False)
+    client = FakeClient(text_stream("never sent"))
+    brain = Brain(CFG, Tools(), memory, None, cache, client=client)
+    with pytest.raises(RateLimited):
+        brain.chat("s1", "hello")
+    assert client.requests == [] and memory.history("s1") == []

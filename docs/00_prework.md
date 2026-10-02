@@ -184,4 +184,4 @@ Two things to protect: the token and `.env`. Both stay on your laptop. After the
 
 ## Next steps
 
-On the day, start with Guide 01: Knowledge in Object Storage. Its first step starts the database, because the database takes the longest to create.
+On the day, start with [Guide 01: Knowledge in Object Storage](01_knowledge.md). Its first step starts the database, because the database takes the longest to create.

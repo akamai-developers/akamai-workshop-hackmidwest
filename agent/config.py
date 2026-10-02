@@ -1,8 +1,8 @@
 """Settings for the agent, read from .env and the environment.
 
 Only OPENAI_BASE_URL and OPENAI_API_KEY are required. Each other setting turns on
-one Akamai service. When a setting is missing, the agent uses a local fallback
-and says so at startup.
+one Akamai service. When a setting is missing, that part of the agent uses a local
+fallback and says so at startup.
 """
 import os
 from dataclasses import dataclass
@@ -60,25 +60,7 @@ def load(env_file: Path | None = REPO_ROOT / ".env") -> Config:
     )
 
 
-def status(cfg: Config) -> list[str]:
-    """One line per role, saying which adapters are live and which are fallbacks. No secrets."""
-    lines = [f"brain      live      {cfg.chat_model} at {cfg.base_url}"]
-    if cfg.has_bucket:
-        lines.append(f"knowledge  live      bucket {cfg.obj_bucket} at {_host(cfg.obj_endpoint)}")
-    else:
-        lines.append("knowledge  fallback  reading docs/sample/ on this machine. Set OBJ_* in .env to use your bucket.")
-    if cfg.database_url:
-        lines.append(f"memory     live      PostgreSQL at {_host(cfg.database_url)}")
-    else:
-        lines.append("memory     fallback  kept in this process only, forgotten on restart. Set DATABASE_URL in .env.")
-    if cfg.valkey_url:
-        lines.append(f"reflexes   live      Valkey at {_host(cfg.valkey_url)}")
-    else:
-        lines.append("reflexes   off       no cache and no rate limit. Set VALKEY_URL to turn them on.")
-    return lines
-
-
-def _host(url: str) -> str:
-    """The host part of a URL, without the user name or password."""
+def host_of(url: str) -> str:
+    """The host and port of a URL, without the user name or password."""
     parsed = urlparse(url if "://" in url else f"https://{url}")
-    return parsed.hostname + (f":{parsed.port}" if parsed.port else "")
+    return f"{parsed.hostname}:{parsed.port}" if parsed.port else str(parsed.hostname)

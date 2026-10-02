@@ -11,7 +11,7 @@ import sys
 import openai
 
 from . import config
-from .brain import build
+from .brain import RateLimited, build
 
 
 class Printer:
@@ -19,22 +19,29 @@ class Printer:
 
     def __init__(self, prefix: str):
         self.prefix = prefix
-        self.midline = False
+        self.started = False  # printed the prefix for the current line of answer
+        self.held = ""  # trailing whitespace, printed only if more text follows
 
     def text(self, chunk: str) -> None:
-        if not self.midline:
+        chunk = self.held + chunk
+        body = chunk.rstrip()
+        self.held = chunk[len(body):]
+        if not body:
+            return
+        if not self.started:
+            body = body.lstrip()
             print(self.prefix, end="")
-            self.midline = True
-        print(chunk, end="", flush=True)
+            self.started = True
+        print(body, end="", flush=True)
 
     def tool(self, name: str, arguments: str) -> None:
         self.end_line()
         print(f"  [tool] {name}({arguments})", file=sys.stderr, flush=True)
 
     def end_line(self) -> None:
-        if self.midline:
+        if self.started:
             print(flush=True)
-            self.midline = False
+        self.started, self.held = False, ""
 
 
 def ask(brain, session_id: str, message: str, prefix: str) -> bool:
@@ -43,6 +50,10 @@ def ask(brain, session_id: str, message: str, prefix: str) -> bool:
         brain.chat(session_id, message, on_text=printer.text, on_tool=printer.tool)
         printer.end_line()
         return True
+    except RateLimited as error:
+        printer.end_line()
+        print(f"[slow down] {error}", file=sys.stderr)
+        return False
     except openai.APIError as error:
         printer.end_line()
         print(f"[error] the brain did not answer: {error}", file=sys.stderr)
@@ -56,10 +67,9 @@ def main() -> int:
                         help="conversation id. Reuse it to continue a conversation (default: terminal)")
     args = parser.parse_args()
 
-    cfg = config.load()
-    for line in config.status(cfg):
+    brain = build(config.load())
+    for line in brain.status():
         print(line, file=sys.stderr)
-    brain = build(cfg)
 
     if args.once:
         return 0 if ask(brain, args.session, args.once, prefix="") else 1
