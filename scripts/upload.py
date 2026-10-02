@@ -37,6 +37,8 @@ def main() -> int:
 
     if store.state == "live":
         print(f"The vectors are in {store.detail}.")
+    elif store.state == "error":
+        print(f"These vectors were not kept. {store.detail}")
     else:
         print("No database, so these vectors were not kept. The running agent indexes new files on its next question.")
     return 0

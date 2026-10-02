@@ -2,6 +2,26 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.6] - 2026-10-02
+
+What a laptop sees when its address is not on the database's allow list, and how to fix it.
+
+### Added
+
+- Guide 02, step 5, has a section for when your address changes. The allow list holds the address your laptop had in guide 01. At home, in a hotel, or on a phone hotspot, the laptop has a different public address, and the database ignores it. The section shows the message, the three lookups, and the update with and without the Linode from guide 03, and what the first one prints when there is no Linode. Guide 01's allow-list note points to it.
+- Guide 04, step 4, says that Akamai adds the IPv4 and IPv6 addresses of all LKE nodes in an account to every database's allow list, every 10 minutes. That is why the node's IPv6 address shows up in the list without anyone typing it. The step's update by hand still lets the agent in at once.
+
+### Changed
+
+- When the connection to the database times out, the agent's `memory` line and `scripts/db_init.py` say that the database ignores addresses that are not on its allow list, and point to guide 02, step 5. Before, the agent said only `connection timeout expired`, `db_init.py` said to check the allow list, and nothing in the kit said how to add a new address. Other connection errors print as before.
+- `scripts/upload.py` says why the vectors were not kept when `DATABASE_URL` is set but the database did not answer. Before, it said "No database".
+- Guide 02's "Show the judges" line and `docs/links.md` put the allow list on the database's **Networking** tab, where Akamai's [Manage a database](https://techdocs.akamai.com/cloud-computing/docs/aiven-manage-database) page puts it, instead of under Settings.
+
+### Verified
+
+- On a new Managed PostgreSQL database in Seattle (`g6-nanode-1`, PostgreSQL 17.11, pgvector 0.8.6): active 4 minutes 37 seconds after it was created, and in DNS at 7 minutes 7 seconds. After an update took this machine off the allow list, every new connection waited 10 seconds and failed with `connection timeout expired`, starting within 10 seconds of the update. The agent printed the new advice on its `memory` line, and `db_init.py` printed exactly the two lines guide 02 now shows. Guide 02's three lookups and its update without a Linode let the machine back in: a new connection worked about 5 seconds after the update, while the status still said `updating`. The status read `active` 38 seconds after the update. The update for a Linode, run with an empty `LINODE_IP`, stopped with `Request failed: 400` and `Invalid IPv4 or IPv6 address(es): /32` and changed nothing. A connection that was already open when its address left the list did not fail: its next query waited 4 minutes 11 seconds and finished once the address was back. Guide 02's Clean up deleted the database, and the API then answered 404 for it.
+- Every bash block of the README and the guides, pasted into bash and into zsh, with GNU tools and with FreeBSD's: 87 blocks and 145 commands, with the same arguments in all four runs.
+
 ## [0.6.5] - 2026-10-02
 
 Windows line endings.

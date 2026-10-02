@@ -188,6 +188,8 @@ The database says `updating` while the change rolls out. The agent connects to i
 linode-cli databases postgresql-view $DB_ID --format status
 ```
 
+Akamai also does this for you, but not right away. Every 10 minutes, each database in your account adds the IPv4 and IPv6 addresses of all LKE nodes in the account to its allow list ([Manage a database](https://techdocs.akamai.com/cloud-computing/docs/aiven-manage-database)). The update above lets the agent in now. The automatic one is why the list later also shows the node's IPv6 address, which you never typed.
+
 ## Step 5: Deploy
 
 Read the three manifests in `k8s/` first: `valkey.yaml` runs Valkey with an in-cluster Service, `agent.yaml` runs the agent, and `service.yaml` is the public front door. Then apply them:

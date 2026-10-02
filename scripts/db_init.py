@@ -28,6 +28,8 @@ def main() -> int:
         if "resolve host" in str(error):
             print("A new database can be active a few minutes before its host name is in DNS. "
                   "Wait two minutes and run this again.")
+        elif "timeout expired" in str(error):
+            print(memory.ALLOW_LIST_HINT)
         else:
             print("Check that the database is active and that your current IP address is on its allow list.")
         return 1

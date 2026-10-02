@@ -20,6 +20,7 @@ import numpy as np
 from .config import host_of
 
 HISTORY_LIMIT = 20  # messages sent back to the model each turn, so long chats fit the context window
+ALLOW_LIST_HINT = "The database ignores addresses that are not on its allow list. To add yours, see guide 02, step 5."
 
 
 @dataclass
@@ -177,7 +178,10 @@ def connect(cfg):
         return PostgresMemory(cfg.database_url)
     except Exception as error:  # keep the agent running and say what went wrong
         reason = str(error).strip().splitlines()[0] if str(error).strip() else type(error).__name__
+        hint = ""
         if "vector type not found" in reason:
             reason = "pgvector is not enabled yet. Run: python scripts/db_init.py"
+        elif "timeout expired" in reason:  # the database ignores addresses that are not on its allow list
+            hint = f" {ALLOW_LIST_HINT}"
         return LocalMemory("error", f"PostgreSQL at {host_of(cfg.database_url)} failed ({reason}). "
-                                    "Using the in-process fallback.")
+                                    f"Using the in-process fallback.{hint}")

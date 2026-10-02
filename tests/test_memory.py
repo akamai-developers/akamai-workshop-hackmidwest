@@ -60,12 +60,23 @@ def test_no_database_url_means_the_fallback():
 
 def test_an_unreachable_database_falls_back_and_says_why_without_the_password():
     cfg = config.Config(base_url="x", api_key="y", database_url=PG_URL)
-    with mock.patch("psycopg.connect", side_effect=psycopg.OperationalError("connection timeout expired")):
+    with mock.patch("psycopg.connect", side_effect=psycopg.errors.ConnectionTimeout("connection timeout expired")):
         mem = memory.connect(cfg)
     assert isinstance(mem, memory.LocalMemory)
     assert mem.state == "error"
     assert "db.example.com:15268" in mem.detail and "timeout" in mem.detail
     assert "pa55word" not in mem.detail
+    # A database drops connections from addresses that are not on its allow list, so they time out.
+    assert mem.detail.endswith(memory.ALLOW_LIST_HINT)
+
+
+def test_other_connection_errors_get_no_allow_list_hint():
+    cfg = config.Config(base_url="x", api_key="y", database_url=PG_URL)
+    error = psycopg.OperationalError('connection failed: FATAL:  password authentication failed for user "akmadmin"')
+    with mock.patch("psycopg.connect", side_effect=error):
+        mem = memory.connect(cfg)
+    assert "password authentication failed" in mem.detail
+    assert "allow list" not in mem.detail
 
 
 def test_a_database_without_pgvector_points_to_db_init():

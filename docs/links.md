@@ -46,7 +46,7 @@ Every page this kit relies on, with one line on when you need it. The guides lin
 | [Managed Databases overview](https://techdocs.akamai.com/cloud-computing/docs/managed-databases) | You want the big picture. |
 | [Get started with Managed Databases](https://techdocs.akamai.com/cloud-computing/docs/getting-started-with-managed-databases) | Creating a database in Cloud Manager instead of the CLI. |
 | [PostgreSQL on Managed Databases](https://techdocs.akamai.com/cloud-computing/docs/aiven-postgresql) | Default user `akmadmin`, database `defaultdb`, and TLS settings. |
-| [Manage a database](https://techdocs.akamai.com/cloud-computing/docs/aiven-manage-database) | Access controls: the allow list of IP addresses that may connect. |
+| [Manage a database](https://techdocs.akamai.com/cloud-computing/docs/aiven-manage-database) | Access controls: the allow list of IP addresses that may connect, on the database's **Networking** tab, and the LKE nodes Akamai adds to it every 10 minutes. |
 | [Engines and plans](https://techdocs.akamai.com/cloud-computing/docs/database-engines-plans) | Picking a bigger plan or a three-node cluster. |
 | [Aiven-powered databases on Akamai](https://www.akamai.com/blog/developers/2025/aug/open-source-fully-managed-aiven-powered-databases-on-akamai) | Akamai's announcement, which names pgvector and pgvectorscale support. |
 | [pgvector](https://github.com/pgvector/pgvector) | The `vector` type, the `<=>` distance operator, and HNSW indexes. |

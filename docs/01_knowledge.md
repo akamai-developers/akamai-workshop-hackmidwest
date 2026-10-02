@@ -90,7 +90,7 @@ echo $DB_ID
 
 Do not wait for the database. Move on.
 
-> NOTE: On venue Wi-Fi, everyone shares one public address, so the allow list admits the whole venue network. The database still requires your password and TLS. Guide 03 adds your Linode's address to the list.
+> NOTE: On venue Wi-Fi, everyone shares one public address, so the allow list admits the whole venue network. The database still requires your password and TLS. Guide 03 adds your Linode's address to the list. On another network, such as home or a phone hotspot, your laptop has a different address; [guide 02, step 5](02_memory.md#when-your-address-changes) shows how to put it on the list.
 
 ## Step 2: Create the bucket
 

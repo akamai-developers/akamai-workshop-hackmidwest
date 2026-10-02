@@ -146,6 +146,46 @@ CREATE INDEX IF NOT EXISTS documents_embedding_idx ON documents USING hnsw (embe
 
 Tested on 2026-10-02: `CREATE EXTENSION vector` works for `akmadmin` on Akamai Managed PostgreSQL 17.
 
+### When your address changes
+
+You need this only when `db_init.py` or the agent says `connection timeout expired`. The allow list holds the address your laptop had in guide 01. On another network, such as home, a hotel, or a phone hotspot, your laptop has a different public address, and the database ignores it. `db_init.py` waits 10 seconds, then says:
+
+```
+Could not connect to a123456-akamai-prod-1234567-default.g2a.akamaidb.net:15268: connection timeout expired
+The database ignores addresses that are not on its allow list. To add yours, see guide 02, step 5.
+```
+
+The agent waits the same 10 seconds when it starts, prints the same advice on its `memory` line, and keeps memory in the process until you fix it. Put your current address on the list. Set three variables first; `LINODE_IP` comes back empty if you have no Linode from guide 03:
+
+```bash
+MY_IP=$(curl -s https://api.ipify.org)
+DB_ID=$(linode-cli databases postgresql-list --label hackmidwest-db --text --no-headers --format id)
+LINODE_IP=$(linode-cli linodes list --label hackmidwest-agent --text --no-headers --format ipv4)
+echo $MY_IP $DB_ID $LINODE_IP
+```
+
+The update replaces the whole list, so name every address that should keep access. If you have the Linode from guide 03, keep it on the list, or the agent on it loses its memory:
+
+```bash
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --allow_list "$LINODE_IP/32" --format id,label,status
+```
+
+If you have no Linode, `LINODE_IP` is empty, and that command stops with `Invalid IPv4 or IPv6 address(es): /32` without changing anything. Use this one:
+
+```bash
+linode-cli databases postgresql-update $DB_ID --allow_list "$MY_IP/32" --format id,label,status
+```
+
+```
+┌────────┬────────────────┬──────────┐
+│ id     │ label          │ status   │
+├────────┼────────────────┼──────────┤
+│ 533120 │ hackmidwest-db │ updating │
+└────────┴────────────────┴──────────┘
+```
+
+On 2026-10-02 the new address could connect a few seconds after the update, while the status still said `updating`, so run what timed out again right away. If it still times out, the network may block the database's port; some guest Wi-Fi allows only web traffic. If guide 04's cluster is running, you can leave its node out: Akamai puts it back on the list within 10 minutes, as guide 04, step 4, explains.
+
 ## Step 6: Ask again
 
 Save the fact again. The memory line now says `live`:
@@ -223,7 +263,7 @@ For your project, add tables in a new file such as `agent/sql/002_tasks.sql` and
 - `python -m agent --once "When is our demo slot?" --session someone-else` answers 2:15 PM.
 - `python scripts/db_init.py` prints the pgvector version again and changes nothing.
 
-**Show the judges:** Cloud Manager, **Databases**, then `hackmidwest-db`: PostgreSQL 17 in Seattle, status Active, and your allow list under Settings. From the terminal, `linode-cli databases postgresql-list --label hackmidwest-db` shows it, and the agent's `memory live ... pgvector 0.8.6` line shows it is in use.
+**Show the judges:** Cloud Manager, **Databases**, then `hackmidwest-db`: PostgreSQL 17 in Seattle, status Active, and your allow list on the **Networking** tab, under Manage Access. From the terminal, `linode-cli databases postgresql-list --label hackmidwest-db` shows it, and the agent's `memory live ... pgvector 0.8.6` line shows it is in use.
 
 ## Clean up
 
