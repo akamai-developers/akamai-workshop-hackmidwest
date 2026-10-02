@@ -140,7 +140,7 @@ Everything goes in a namespace, `hackmidwest`, so `kubectl get` shows only this 
 ```bash
 kubectl create namespace hackmidwest --save-config
 kubectl -n hackmidwest create secret generic agent-env --from-env-file=.env --save-config
-COPYFILE_DISABLE=1 tar -czf agent.tgz --exclude=__pycache__ agent docs/sample
+COPYFILE_DISABLE=1 tar --no-xattrs -czf agent.tgz --exclude=__pycache__ agent docs/sample
 kubectl -n hackmidwest create configmap agent-code --from-file=agent.tgz --save-config
 rm agent.tgz
 ```
@@ -151,7 +151,7 @@ secret/agent-env created
 configmap/agent-code created
 ```
 
-`--from-env-file` reads `.env` line by line and skips the comment lines. Unlike the agent on your laptop, it keeps quotes and end-of-line comments as part of a value: `OPENAI_API_KEY="hk_..."` would reach the pod with its quotes, and the brain would refuse the key. Remove any quotes around values in `.env` before this step. `--save-config` records what you created, so the `kubectl apply` commands in step 8 and in `scripts/deploy_lke.sh` can change these objects later without a warning. `COPYFILE_DISABLE=1` stops macOS from adding hidden `._` files to the tarball; on Linux it does nothing. The tarball of `agent/` and `docs/sample/` was 19 KB on 2026-10-02; a ConfigMap holds up to 1 MiB.
+`--from-env-file` reads `.env` line by line and skips the comment lines. Unlike the agent on your laptop, it keeps quotes and end-of-line comments as part of a value: `OPENAI_API_KEY="hk_..."` would reach the pod with its quotes, and the brain would refuse the key. Remove any quotes around values in `.env` before this step. `--save-config` records what you created, so the `kubectl apply` commands in step 8 and in `scripts/deploy_lke.sh` can change these objects later without a warning. `COPYFILE_DISABLE=1` stops macOS from adding hidden `._` files to the tarball. `--no-xattrs` leaves out file attributes, such as the quarantine flag macOS puts on downloaded files; the tar in the pod would print a warning for each one at the top of the agent's log. On Linux, both change nothing. The tarball of `agent/` and `docs/sample/` was 19 KB on 2026-10-02; a ConfigMap holds up to 1 MiB.
 
 ## Step 4: Let the node into the database
 
@@ -291,7 +291,7 @@ The ConfigMap is mounted at `/code`. The pod unpacks your code, installs its pac
 To ship a code change, rebuild the ConfigMap and restart the agent:
 
 ```bash
-COPYFILE_DISABLE=1 tar -czf agent.tgz --exclude=__pycache__ agent docs/sample
+COPYFILE_DISABLE=1 tar --no-xattrs -czf agent.tgz --exclude=__pycache__ agent docs/sample
 kubectl -n hackmidwest create configmap agent-code --from-file=agent.tgz --dry-run=client -o yaml | kubectl apply -f -
 rm agent.tgz
 kubectl -n hackmidwest rollout restart deployment/agent

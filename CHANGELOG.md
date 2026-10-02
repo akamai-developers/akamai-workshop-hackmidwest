@@ -2,6 +2,25 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] - 2026-10-02
+
+Checks for students on a Mac, where commands are pasted into zsh and the scripts run with bash 3.2 and BSD tools.
+
+### Added
+
+- `tests/fake_cloud.py`, a fake Akamai account that stands in for `linode-cli`, `curl`, `ssh`, `scp`, `kubectl`, and `sleep`. `tests/test_scripts.py` runs `up.sh` twice, `status.sh`, `deploy_linode.sh`, `deploy_lke.sh`, and `down.sh` against it, in the order a team would. The tests check the plans, regions, and allow lists each script asks for, the `.env` it writes, the code archive the LKE pod unpacks, and that `down.sh` deletes the kit's seven resources and none of the account's other ones. Bash, Python, `tar`, `sed`, and `awk` are the real ones on your PATH, so on a Mac the tests run what a student's laptop runs.
+
+### Changed
+
+- Guide 04 and `scripts/deploy_lke.sh` pack the code with `tar --no-xattrs`. A Mac's `tar` stores file attributes, such as the quarantine flag on downloaded files, in the archive, and the pod's GNU `tar` printed one warning per attribute at the top of the agent's log.
+
+### Verified
+
+- Every one of the 84 bash blocks in the README and the guides, pasted in order into zsh 5.9 (`zsh -f -i`), gives the same commands, arguments, and output as bash 5.2. Commands that reach the network ran against stand-ins that record their arguments. Planted zsh traps (an unquoted `?` or `[ ]`, a variable that bash splits, an end-of-line `#` comment, `==` in `[ ]`) all showed up as differences.
+- The 26 script tests pass with bash 3.2.57, the version macOS ships, and with `bsdtar` as `tar`.
+- An archive made by `bsdtar` from files with attributes unpacks with GNU `tar` 1.35 in `python:3.12-slim`, the pod's image: exit code 0 either way, 32 warnings without `--no-xattrs`, none with it.
+- 79 tests pass.
+
 ## [0.6.0] - 2026-10-02
 
 Phase 6: polish and verification.

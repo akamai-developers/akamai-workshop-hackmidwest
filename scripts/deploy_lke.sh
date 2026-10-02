@@ -39,7 +39,7 @@ echo "$(elapsed): the node is Ready."
 kubectl create namespace hackmidwest --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 kubectl -n hackmidwest create secret generic agent-env --from-env-file=.env --dry-run=client -o yaml \
   | kubectl apply -f - >/dev/null
-COPYFILE_DISABLE=1 tar -czf agent.tgz --exclude=__pycache__ agent docs/sample
+COPYFILE_DISABLE=1 tar --no-xattrs -czf agent.tgz --exclude=__pycache__ agent docs/sample
 kubectl -n hackmidwest create configmap agent-code --from-file=agent.tgz --dry-run=client -o yaml \
   | kubectl apply -f - >/dev/null
 rm -f agent.tgz
