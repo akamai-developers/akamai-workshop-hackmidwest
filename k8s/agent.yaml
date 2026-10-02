@@ -1,0 +1,48 @@
+# The agent on Kubernetes, with no image registry. The pod starts from the public python:3.12-slim
+# image, unpacks your code from the agent-code ConfigMap, installs the agent's packages, and starts
+# the server. Settings come from the agent-env Secret, which guide 04 makes from your .env.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  namespace: hackmidwest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent
+  template:
+    metadata:
+      labels:
+        app: agent
+    spec:
+      containers:
+        - name: agent
+          image: python:3.12-slim
+          command: ["sh", "-c"]
+          args:
+            - mkdir -p /app && tar -xzf /code/agent.tgz -C /app && cd /app &&
+              pip install --no-cache-dir --quiet --root-user-action=ignore -r agent/requirements.txt &&
+              exec uvicorn agent.server:app --host 0.0.0.0 --port 8000
+          envFrom:
+            - secretRef:
+                name: agent-env
+          env:
+            - name: VALKEY_URL  # the valkey Service in valkey.yaml; this wins over the Secret
+              value: redis://valkey:6379/0
+          ports:
+            - containerPort: 8000
+          readinessProbe:  # traffic waits until /health answers, after the packages install
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          volumeMounts:
+            - name: code
+              mountPath: /code
+              readOnly: true
+      volumes:
+        - name: code
+          configMap:
+            name: agent-code

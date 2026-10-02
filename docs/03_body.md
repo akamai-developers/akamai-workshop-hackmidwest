@@ -316,5 +316,5 @@ To delete everything from guides 01 to 03 at once, run `bash scripts/down.sh`.
 
 Then try an optional module:
 
-- Guide 04: the same agent on Kubernetes with LKE and a NodeBalancer (coming next)
+- [Guide 04: Kubernetes with LKE](04_lke.md): the same agent on a cluster behind a NodeBalancer
 - [Guide 05: Valkey reflexes](05_valkey.md): see the cache and the rate limit at work

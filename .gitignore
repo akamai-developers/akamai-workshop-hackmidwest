@@ -149,6 +149,9 @@ activemq-data/
 
 # Environments
 .env
+# Kit files that hold credentials or build output
+hackmidwest-kubeconfig.yaml
+agent.tgz
 .envrc
 .venv
 env/

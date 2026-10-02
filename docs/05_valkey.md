@@ -167,4 +167,4 @@ Nothing extra to delete. Valkey runs inside the Linode from guide 03 and goes aw
 
 ## Next steps
 
-Change the limit, cache something else you compute often, or store your own data in Valkey with the same `redis` client. For a second way to run the body, try guide 04 on LKE (coming next).
+Change the limit, cache something else you compute often, or store your own data in Valkey with the same `redis` client. For a second way to run the body, try [guide 04 on LKE](04_lke.md).

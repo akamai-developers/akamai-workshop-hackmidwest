@@ -12,6 +12,7 @@ source "$(dirname "$0")/lib.sh"
 lookup() { linode-cli "$1" "$2" --label "$3" --text --no-headers --format id 2>/dev/null; }
 
 lke_id=$(lookup lke clusters-list "$LKE_LABEL")
+nb_id=$(lookup nodebalancers list "$NB_LABEL")
 linode_id=$(lookup linodes list "$LINODE_LABEL")
 fw_id=$(lookup firewalls list "$FIREWALL_LABEL")
 database_id=$(db_id)
@@ -38,6 +39,7 @@ echo "Resources from this kit in your account:"
 found=0
 show() { printf "  %-16s %-26s %s\n" "$1" "$2" "$3"; found=$((found + 1)); }
 [[ -n $lke_id ]] && show "LKE cluster" "$LKE_LABEL (id $lke_id)" "\$0.018 an hour per node"
+[[ -n $nb_id ]] && show "NodeBalancer" "$NB_LABEL (id $nb_id)" "\$0.015 an hour"
 [[ -n $linode_id ]] && show "Linode" "$LINODE_LABEL (id $linode_id)" "\$0.018 an hour"
 [[ -n $fw_id ]] && show "Cloud Firewall" "$FIREWALL_LABEL (id $fw_id)" "free"
 [[ -n $database_id ]] && show "PostgreSQL" "$DB_LABEL (id $database_id)" "\$0.024 an hour"
@@ -54,6 +56,7 @@ else
   failed=0
   run() { echo "  $1"; shift; "$@" >/dev/null || { echo "    FAILED: $*"; failed=$((failed + 1)); }; }
   [[ -n $lke_id ]] && run "Deleting LKE cluster $LKE_LABEL" linode-cli lke cluster-delete "$lke_id"
+  [[ -n $nb_id ]] && run "Deleting NodeBalancer $NB_LABEL" linode-cli nodebalancers delete "$nb_id"
   [[ -n $linode_id ]] && run "Deleting Linode $LINODE_LABEL" linode-cli linodes delete "$linode_id"
   [[ -n $fw_id ]] && run "Deleting firewall $FIREWALL_LABEL" linode-cli firewalls delete "$fw_id"
   [[ -n $database_id ]] && run "Deleting database $DB_LABEL" linode-cli databases postgresql-delete "$database_id"
@@ -69,6 +72,10 @@ fi
 if [[ $bucket_state != unknown ]]; then
   for key in OBJ_ENDPOINT OBJ_BUCKET OBJ_ACCESS_KEY OBJ_SECRET_KEY OBJ_KEY_ID DATABASE_URL; do set_env "$key" ""; done
   echo "Emptied OBJ_* and DATABASE_URL in .env. The agent is back on its local fallbacks."
+fi
+if [[ -f $KUBECONFIG_FILE && -z $(lookup lke clusters-list "$LKE_LABEL") ]]; then
+  rm -f "$KUBECONFIG_FILE"
+  echo "Removed $KUBECONFIG_FILE, the credential for the deleted cluster."
 fi
 echo
 echo "Object Storage itself still bills \$5 a month until you cancel it. Cancelling deletes every bucket"

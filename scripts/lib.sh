@@ -1,3 +1,4 @@
+# shellcheck shell=bash disable=SC2034  # the scripts that source this file use these settings
 # Settings and helpers shared by the scripts in this folder. They source it; you do not run it.
 # Every resource the kit creates lives in Seattle (us-sea) and has a label that starts with hackmidwest-.
 # Written for bash 3.2 too, because that is what macOS ships.
@@ -18,6 +19,8 @@ LINODE_LABEL=hackmidwest-agent
 LINODE_TYPE=g6-standard-1
 LINODE_IMAGE=linode/ubuntu24.04
 LKE_LABEL=hackmidwest-lke
+NB_LABEL=hackmidwest-nb
+KUBECONFIG_FILE=hackmidwest-kubeconfig.yaml  # a credential for the cluster; .gitignore keeps it out of git
 SSH_KEY=${SSH_KEY:-$HOME/.ssh/id_ed25519}
 
 if [[ ! -f .env ]]; then

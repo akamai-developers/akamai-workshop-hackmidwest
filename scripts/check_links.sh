@@ -5,7 +5,7 @@
 # www.akamai.com and www.linode.com answer 403 to scripts and headless browsers (bot protection).
 # Those links are listed as SKIP so you can open them in a browser yourself.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 BOT_PROTECTED='^https?://(www\.)?(akamai|linode)\.com/'
 # This repository answers 404 until it is public. Students need it public to clone it.

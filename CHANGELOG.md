@@ -2,6 +2,22 @@
 
 Notable changes to this kit, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+Phase 5, in progress: the optional LKE module. Not yet run on a live cluster.
+
+### Added
+
+- `k8s/agent.yaml`, `k8s/valkey.yaml`, and `k8s/service.yaml`. The agent runs on the public `python:3.12-slim` image and unpacks its code from a ConfigMap, so no image registry is needed. The Service uses a NodeBalancer created as `hackmidwest-nb` through the `linode-loadbalancer-nodebalancer-id` annotation, so it carries the kit's label.
+- `scripts/deploy_lke.sh`: a one-node LKE cluster, the kubeconfig, the NodeBalancer, the Secret from `.env`, the code ConfigMap, the database allow list, and a wait for `/health` through the NodeBalancer.
+- `docs/04_lke.md`, with each step that needs a live cluster marked unverified.
+- `scripts/down.sh` also deletes `hackmidwest-nb` and the local kubeconfig.
+
+### Verified
+
+- The manifests pass `kubeconform -strict` against the Kubernetes 1.33 schemas.
+- The pod's startup command, run in Docker with the code tarball mounted at `/code`, answered `/health` 12 seconds after start. The tarball is 18.5 KB.
+
 ## [0.4.0] - 2026-10-02
 
 Phase 4: the body on a Linode.

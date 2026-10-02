@@ -1,0 +1,18 @@
+# The front door. On LKE, a Service of type LoadBalancer is served by a NodeBalancer.
+# The annotation hands it the NodeBalancer you created, hackmidwest-nb, instead of letting the
+# cluster make one with a generated name. Replace NODEBALANCER_ID with its id; guide 04 uses sed.
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent
+  namespace: hackmidwest
+  annotations:
+    service.beta.kubernetes.io/linode-loadbalancer-nodebalancer-id: "NODEBALANCER_ID"
+spec:
+  type: LoadBalancer
+  selector:
+    app: agent
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000

@@ -78,6 +78,7 @@ Every page this kit relies on, with one line on when you need it. The guides lin
 | Link | When you need it |
 |---|---|
 | [Linode Kubernetes Engine](https://techdocs.akamai.com/cloud-computing/docs/linode-kubernetes-engine) | You want the big picture. |
+| [Install kubectl](https://kubernetes.io/docs/tasks/tools/) | Before guide 04. Pick a version within one minor version of your cluster. |
 | [Get started with LKE](https://techdocs.akamai.com/cloud-computing/docs/getting-started-with-lke-linode-kubernetes-engine) | First cluster. |
 | [Manage a cluster with kubectl](https://techdocs.akamai.com/cloud-computing/docs/manage-a-cluster-with-kubectl) | Getting the kubeconfig and running `kubectl`. |
 | [Load balancing on LKE](https://techdocs.akamai.com/cloud-computing/docs/get-started-with-load-balancing-on-an-lke-cluster) | How a `LoadBalancer` Service becomes a NodeBalancer. |
@@ -104,4 +105,5 @@ Every page this kit relies on, with one line on when you need it. The guides lin
 | [Community questions](https://www.linode.com/community/questions/) | Searching for an answer someone already got. At the event, ask the mentors and the event Discord first. |
 | [Docker Desktop](https://docs.docker.com/get-started/get-docker/) | Running the agent in a container on your laptop. Optional. |
 | [Solution architect agent workshop](https://github.com/akamai-developers/akamai-workshop-solution-architect-agent) | After this kit. Eight modules: tools, MCP, guardrails, memory, diagrams, evals, multi-agent, and deploying to LKE. |
+| [Its module 8: deploy to LKE](https://github.com/akamai-developers/akamai-workshop-solution-architect-agent/tree/main/workshop/08_deploy_to_lke) | Moving guide 04 to production: an image in a registry, two replicas. |
 | [The inference notebooks](../notebooks/00_quickstart.ipynb) | Learning the brain: chat, embeddings, images, tools, and structured output. |

@@ -24,7 +24,7 @@ A small AI agent that runs on your own Akamai Cloud account. You build it in 45 
 |---|---|---|
 | **Guided** | 45 minutes | Do the [pre-work](docs/00_prework.md) the night before. On the day, follow guides [01](docs/01_knowledge.md), [02](docs/02_memory.md), and [03](docs/03_body.md). You type each `linode-cli` command yourself and watch each resource appear in Cloud Manager. You finish with the agent on your Linode, using every service in the picture. |
 | **Fast** | 30 minutes | Do the pre-work, then run three scripts that replay the guides' commands: Object Storage, a Linode, and a Cloud Firewall, without the managed database. Add the database later: guide 01, step 1, then guide 02. |
-| **Self-serve** | 15 minutes each | Optional modules: [Valkey reflexes](docs/05_valkey.md), Kubernetes on LKE (coming next), and the five [inference notebooks](#brain-the-inference-notebooks). |
+| **Self-serve** | 15 minutes each | Optional modules: [Kubernetes on LKE](docs/04_lke.md), [Valkey reflexes](docs/05_valkey.md), and the five [inference notebooks](#brain-the-inference-notebooks). |
 
 The fast path, from the repository folder with the virtual environment active:
 
@@ -72,7 +72,7 @@ The fastest proof is the agent itself: `http://<your Linode address>:8000/health
 | 1 | [Knowledge in Object Storage](docs/01_knowledge.md) | A bucket, an access key, and documents the agent can search. Starts the database. | 15 |
 | 2 | [Memory in Managed PostgreSQL](docs/02_memory.md) | pgvector, and conversations and facts that survive a restart | 10 |
 | 3 | [The body on a Linode](docs/03_body.md) | A Linode, a Cloud Firewall, Docker, and Valkey | 20 |
-| 4 | Kubernetes on LKE (optional, coming next) | An LKE cluster and a NodeBalancer | 15 |
+| 4 | [Kubernetes on LKE (optional)](docs/04_lke.md) | An LKE cluster and a NodeBalancer | 15 |
 | 5 | [Valkey reflexes (optional)](docs/05_valkey.md) | An embedding cache and a per-session rate limit | 15 |
 
 Measured on 2026-10-02: the database was active 6 minutes after it was created, and `scripts/deploy_linode.sh` had the agent answering on its Linode 3 minutes 9 seconds after it started. [agent/README.md](agent/README.md) explains the code, and every link the guides rely on is in [docs/links.md](docs/links.md).
