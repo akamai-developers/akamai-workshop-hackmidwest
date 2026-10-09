@@ -274,5 +274,5 @@ def test_down_empties_the_service_settings_and_removes_the_kubeconfig(runs):
     run = runs["down"]
     keys = ["OBJ_ENDPOINT", "OBJ_BUCKET", "OBJ_ACCESS_KEY", "OBJ_SECRET_KEY", "OBJ_KEY_ID", "DATABASE_URL"]
     assert {key: run["env"][key] for key in keys} == dict.fromkeys(keys, "")
-    assert run["env"]["OPENAI_BASE_URL"] == "https://api.openai.com/v1"
+    assert run["env"]["OPENAI_BASE_URL"] == "https://ws.akamai-workshops.com/v1"
     assert runs["down, answer no"]["kubeconfig"] and run["kubeconfig"] is None

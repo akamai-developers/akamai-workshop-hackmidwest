@@ -9,7 +9,7 @@ The values below come from the supplied workshop materials. The instructor shoul
 ## Connection
 
 ```ini
-OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_BASE_URL=https://ws.akamai-workshops.com/v1
 OPENAI_API_KEY=paste_your_team_key_here
 ```
 
@@ -33,7 +33,7 @@ client = OpenAI(timeout=60.0)
 | Text embeddings | `POST /v1/embeddings` | `hackathon-embedding` | `data[i].embedding` |
 | Image generation | `POST /v1/images/generations` | `hackathon-image` | `data[0].b64_json` |
 
-Use these aliases rather than guessing a backing model name. The supplied deployment does not expose model listing, the Responses API, audio, image editing, or image input to chat. Check required operations before selecting a framework integration.
+Use these aliases rather than guessing a backing model name. `GET /v1/models` lists the three aliases, with the context window of the chat and embedding models. The deployment does not expose the Responses API, audio, image editing, or image input to chat: those paths return `404`, and image input returns `400`. Chat and embeddings answer with their one backing model whatever model name you send; images reject any name but `hackathon-image` with `422`. Check required operations before selecting a framework integration.
 
 ## Chat
 
@@ -93,7 +93,7 @@ The service returns one PNG per request. Supported square sizes are `512x512`, `
 | Chat context, input plus output | 32,768 tokens |
 | Chat output | 512 tokens by default; 4,096 maximum |
 | Embedding inputs | Up to 16 strings per request |
-| Embedding token budget | 8,192 total tokens per request; chunk long text before sending |
+| Embedding context | 8,192 tokens per input. Longer inputs are not rejected, so chunk long text before sending |
 | Image prompt | Up to 2,000 characters |
 | Image count and response format | `n=1`, `b64_json` |
 

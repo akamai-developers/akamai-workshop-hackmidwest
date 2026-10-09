@@ -5,7 +5,7 @@ A 30-minute Hack Midwest workshop, with an optional 30-minute build session. Lea
 ## Start here
 
 > ### $300 in free credit for Akamai Cloud
-> Sign up with the HackMidwest link: **[http://login.linode.com/signup?promo=akm-dev-git-300-72326-P153](http://login.linode.com/signup?promo=akm-dev-git-300-72326-P153)**
+> Sign up with the HackMidwest link: **[http://login.linode.com/signup?promo=akm-dev-hack-mid-300-100826-K277](http://login.linode.com/signup?promo=akm-dev-hack-mid-300-100826-K277)**
 
 1. **[Set up your laptop](docs/00_prework.md)** before the session.
 2. **[Follow the workshop](docs/workshop.md)** for your first model request and a document retrieval example.

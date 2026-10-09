@@ -66,6 +66,7 @@ kubectl -n hackmidwest get events --sort-by=.metadata.creationTimestamp
 | `/health` returns 200 but chat fails | Inference request, quota, application log, source data |
 | LKE pod has invalid credentials | Quotes or inline comments in `.env`; `kubectl --from-env-file` preserves them |
 | Works locally but not after deployment | Copied environment, network allow list, dependencies, redeployment |
+| Deploy script stops with `Request failed: 500` right after cloud-init | A transient API error on the database allow-list update; on 2026-10-09 the address had been added anyway. Run the script again; it reuses the firewall and VM and skips finished steps |
 | Account activation or resource limit error | Cloud Manager account status; organizer or provider support |
 
 After fixing a database connection that failed at startup, restart the application. The starter may already be using its in-process fallback.

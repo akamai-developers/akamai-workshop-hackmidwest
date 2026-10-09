@@ -38,6 +38,8 @@ The script:
 4. Copies the starter and `.env` over SSH, then builds and starts the containers.
 5. Waits for `/health` and prints the application address.
 
+If the script stops partway, run it again. It reuses the firewall and Linode and skips the steps already done.
+
 In Cloud Manager, inspect **Linodes** and **Firewalls**. A running VM means the machine has booted; the application still needs to build and start.
 
 ## 3. Verify the application

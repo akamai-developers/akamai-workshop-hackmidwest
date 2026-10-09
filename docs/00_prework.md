@@ -38,7 +38,7 @@ All shell commands in these materials run from `akamai-workshop-hackmidwest`, un
 Open `.env` in your editor and replace the placeholder key:
 
 ```ini
-OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_BASE_URL=https://ws.akamai-workshops.com/v1
 OPENAI_API_KEY=paste_your_team_key_here
 ```
 
@@ -69,7 +69,7 @@ Select `00_quickstart.ipynb` and the kernel for your workshop environment. Durin
 
 ## 4. Create or confirm your cloud account
 
-For the cloud labs, use [the workshop signup link](https://login.linode.com/signup?promo=akm-dev-git-300-72326-P153). The supplied promotion advertises $300 in credit; confirm eligibility, amount, and expiration with the organizers and in Cloud Manager before creating resources. Credit does not remove the need to track charges.
+For the cloud labs, use [the workshop signup link](http://login.linode.com/signup?promo=akm-dev-hack-mid-300-100826-K277). The supplied promotion advertises $300 in credit; confirm eligibility, amount, and expiration with the organizers and in Cloud Manager before creating resources. Credit does not remove the need to track charges.
 
 Sign in to [Cloud Manager](https://cloud.linode.com). Complete any account verification, then check **Administration > Billing**. If activation is pending, follow the email instructions or [account troubleshooting guidance](https://techdocs.akamai.com/cloud-computing/docs/troubleshooting-cloud-manager-errors). You can still use the inference notebooks while waiting.
 
@@ -88,6 +88,12 @@ Create a personal access token at [API Tokens](https://cloud.linode.com/profile/
 | NodeBalancers | Read/Write | LKE load balancer and full teardown |
 
 If you use only manual commands for one service, grant only the scopes those commands need. The automation and teardown scripts inspect several services even on a partial deployment. Leave unrelated scopes disabled. See [token management](https://techdocs.akamai.com/cloud-computing/docs/manage-personal-access-tokens).
+
+If your shell already sets `LINODE_CLI_TOKEN` for another project, unset it first. With that variable set, `linode-cli obj` cannot save the access key it creates and refuses to run. This prints `set` when the variable is present and nothing when it is not:
+
+```bash
+echo ${LINODE_CLI_TOKEN:+set}
+```
 
 ```bash
 linode-cli configure --token
