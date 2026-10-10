@@ -14,6 +14,7 @@ Use a unique name in the workshop's Seattle cluster:
 
 ```bash
 BUCKET=hackmidwest-$(openssl rand -hex 4)
+linode-cli obj regenerate-keys
 linode-cli obj mb "$BUCKET" --cluster us-sea-1
 ```
 
